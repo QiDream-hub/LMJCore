@@ -1,0 +1,183 @@
+{
+  "main": {
+    "id": "08946d865f6df81e",
+    "type": "split",
+    "children": [
+      {
+        "id": "8009554a4eb2438f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ec70e0ccccbf95db",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "core/LMJCore.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "LMJCore"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "896a9096ed936470",
+    "type": "split",
+    "children": [
+      {
+        "id": "8c2bfb811dae3eab",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "910816c004b6907c",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "5acb9697ffe22705",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "7d191548cc08caf3",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "b2a3d913764e5fc6",
+    "type": "split",
+    "children": [
+      {
+        "id": "7882c16b80ed7c02",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e3be18698dcc559c",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "core/LMJCore.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "LMJCore 的反向链接列表"
+            }
+          },
+          {
+            "id": "e2fab61849d4890d",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "core/LMJCore.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "LMJCore 的出链列表"
+            }
+          },
+          {
+            "id": "a1f3e82275ea56b8",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "41c982a7545a5127",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "core/LMJCore.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "LMJCore 的大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:创建新数据库": false
+    }
+  },
+  "active": "ec70e0ccccbf95db",
+  "lastOpenFiles": [
+    "LMJCore Toolkit/LMJCore Toolkit ROOT Object.md",
+    "core/LMJCore 愿景文档.md",
+    "core/LMJCore 事务.md",
+    "core/LMJCore 实现细则与集成指南.md",
+    "core/LMJCore 内核使用流程图.md",
+    "core/LMJCore 框架扩展：指针关系管理规范.md",
+    "core/LMJCore.md",
+    "core/LMJCore 核心设计定义.md"
+  ]
+}

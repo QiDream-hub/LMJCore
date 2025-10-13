@@ -431,7 +431,7 @@ int lmjcore_exist(lmjcore_txn* txn, const lmjcore_ptr* ptr) {
         return 0; // 不存在
     }
     
-    if (rc == MDB_SUCCESS && !memcmp(data.mv_data, ptr, 17)) {
+    if (rc == MDB_SUCCESS && !memcmp(data.mv_data, ptr->data, 17)) {
         return 1; // 存在
     }
 
@@ -680,7 +680,7 @@ int lmjcore_obj_get(lmjcore_txn* txn,
     // 设置返回头在缓冲区起始位置
     lmjcore_result* result = (lmjcore_result*)result_buf;
     result->error_count = 0;
-    result->member_count = 0;
+    result->count = 0;
     *result_head = result;
 
     // 最小缓冲区检查
@@ -827,7 +827,7 @@ int lmjcore_obj_get(lmjcore_txn* txn,
         
         // 移动到下一个描述符位置
         current_descriptor++;
-        result->member_count++;
+        result->count++;
         
         // 获取下一个成员名称
         rc = mdb_cursor_get(cursor, &key, &member_name_val, MDB_NEXT_DUP);
@@ -836,16 +836,130 @@ int lmjcore_obj_get(lmjcore_txn* txn,
     mdb_cursor_close(cursor);
 
     // 设置最终的成员描述符指针
-    result->members = (lmjcore_member_descriptor*)descriptors_start;
+    result->descriptor.members = (lmjcore_member_descriptor*)descriptors_start;
     
     return LMJCORE_SUCCESS;
 }
 
+
+/**
+ * @brief 获取数组的所有元素
+ * 
+ * 从指定数组指针读取所有元素，支持宽松和严格模式。
+ * - 严格模式：若数组不存在则立即返回错误。
+ * - 宽松模式：若数组不存在或为空，返回空数组结构并记录错误。
+ * 
+ * 结果写入调用方提供的 result_buf 缓冲区，采用紧凑布局：
+ *  [ lmjcore_result头部 | value_descriptor数组 | 元素数据（从后向前） ]
+ * 
+ * @param txn 有效事务句柄
+ * @param arr_ptr 数组指针
+ * @param mode 查询模式（宽松/严格）
+ * @param result_buf 输出缓冲区
+ * @param result_buf_size 缓冲区大小
+ * @param result_head 输出：指向 result_buf 中 lmjcore_result 结构的指针
+ * @return 错误码（LMJCORE_SUCCESS 表示成功，即使有语义错误也视为成功）
+ */
 int lmjcore_arr_get(lmjcore_txn* txn, const lmjcore_ptr* arr_ptr,
                     lmjcore_query_mode mode,
                     uint8_t* result_buf, size_t result_buf_size,
-                    lmjcore_result* result) {
-    // 简化实现 - 实际需要遍历数组元素
+                    lmjcore_result** result_head) {
+    if (!txn || !arr_ptr || !result_buf || !result_head || result_buf_size < sizeof(lmjcore_result)) {
+        return LMJCORE_ERROR_INVALID_PARAM;
+    }
+
+    // 初始化结果结构
+    lmjcore_result* result = (lmjcore_result*)result_buf;
+    memset(result, 0, sizeof(lmjcore_result));
+    *result_head = result;
+
+    // 检查数组是否存在（通过 arr 数据库）
+    MDB_val key = { .mv_size = 17, .mv_data = (void*)arr_ptr->data };
+    MDB_val data;
+    int rc = mdb_get(txn->mdb_txn, txn->env->arr_dbi, &key, &data);
+
+    if (rc == MDB_NOTFOUND) {
+        // 数组不存在
+        if (mode == LMJCORE_MODE_STRICT) {
+            add_entity_not_found_error(result, arr_ptr);
+            return LMJCORE_SUCCESS;
+        } else {
+            // 宽松模式：返回空数组
+            result->count = 0;
+            result->descriptor.value = NULL;
+            add_entity_not_found_error(result, arr_ptr);
+            return LMJCORE_SUCCESS;
+        }
+    } else if (rc != MDB_SUCCESS) {
+        add_lmdb_error(result, arr_ptr, rc);
+        return LMJCORE_SUCCESS;
+    }
+
+    // 数组存在，开始遍历其元素
+    MDB_cursor* cursor;
+    rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
+    if (rc != MDB_SUCCESS) {
+        add_lmdb_error(result, arr_ptr, rc);
+        return LMJCORE_SUCCESS;
+    }
+
+    // 定位到数组的第一个元素
+    rc = mdb_cursor_get(cursor, &key, &data, MDB_SET);
+    if (rc != MDB_SUCCESS) {
+        mdb_cursor_close(cursor);
+        add_lmdb_error(result, arr_ptr, rc);
+        return LMJCORE_SUCCESS;
+    }
+
+    // 预计算所需空间
+    size_t total_data_size = 0;
+    size_t element_count = 0;
+    MDB_val tmp_key = key, tmp_val = data;
+
+    do {
+        total_data_size += tmp_val.mv_size;
+        element_count++;
+        rc = mdb_cursor_get(cursor, &tmp_key, &tmp_val, MDB_NEXT_DUP);
+    } while (rc == MDB_SUCCESS && memcmp(tmp_key.mv_data, arr_ptr->data, 17) == 0);
+
+    // 重置游标到起始位置
+    mdb_cursor_get(cursor, &key, &data, MDB_SET);
+
+    // 计算所需总空间
+    size_t descriptors_size = element_count * sizeof(lmjcore_value_descriptor);
+    size_t available_data_space = result_buf_size - sizeof(lmjcore_result) - descriptors_size;
+
+    if (total_data_size > available_data_space) {
+        mdb_cursor_close(cursor);
+        add_buffer_error(result, arr_ptr);
+        return LMJCORE_SUCCESS;
+    }
+
+    // 填充结果结构
+    result->count = element_count;
+    result->descriptor.value = (lmjcore_value_descriptor*)(result_buf + sizeof(lmjcore_result));
+
+    // 数据存储从缓冲区末尾向前写入
+    uint8_t* data_write_ptr = result_buf + result_buf_size;
+    MDB_cursor* read_cursor;
+    mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &read_cursor);
+    mdb_cursor_get(read_cursor, &key, &data, MDB_SET);
+
+    for (size_t i = 0; i < element_count; i++) {
+        data_write_ptr -= data.mv_size;
+        memcpy(data_write_ptr, data.mv_data, data.mv_size);
+
+        result->descriptor.value[i].value_offset = data_write_ptr - result_buf;
+        result->descriptor.value[i].value_len = data.mv_size;
+
+        if (i < element_count - 1) {
+            mdb_cursor_get(read_cursor, &key, &data, MDB_NEXT_DUP);
+        }
+    }
+
+    mdb_cursor_close(read_cursor);
+    mdb_cursor_close(cursor);
+
     return LMJCORE_SUCCESS;
 }
 

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "core/LMJCore.md",
+                "file": "core/LMJCore 核心设计定义.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "LMJCore"
+              "title": "LMJCore 核心设计定义"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "core/LMJCore.md",
+                "file": "core/LMJCore 核心设计定义.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "LMJCore 的反向链接列表"
+              "title": "LMJCore 核心设计定义 的反向链接列表"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "core/LMJCore.md",
+                "file": "core/LMJCore 核心设计定义.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "LMJCore 的出链列表"
+              "title": "LMJCore 核心设计定义 的出链列表"
             }
           },
           {
@@ -142,13 +142,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "core/LMJCore.md",
+                "file": "core/LMJCore 核心设计定义.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "LMJCore 的大纲"
+              "title": "LMJCore 核心设计定义 的大纲"
             }
           }
         ]
@@ -171,13 +171,13 @@
   },
   "active": "ec70e0ccccbf95db",
   "lastOpenFiles": [
-    "LMJCore Toolkit/LMJCore Toolkit ROOT Object.md",
-    "core/LMJCore 愿景文档.md",
     "core/LMJCore 事务.md",
+    "core/LMJCore 愿景文档.md",
     "core/LMJCore 实现细则与集成指南.md",
     "core/LMJCore 内核使用流程图.md",
     "core/LMJCore 框架扩展：指针关系管理规范.md",
+    "core/LMJCore 核心设计定义.md",
     "core/LMJCore.md",
-    "core/LMJCore 核心设计定义.md"
+    "LMJCore Toolkit/LMJCore Toolkit ROOT Object.md"
   ]
 }

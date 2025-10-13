@@ -95,6 +95,11 @@ typedef struct {
     uint16_t value_len;
 } lmjcore_member_descriptor;
 
+typedef struct{
+    uint32_t value_offset;
+    uint16_t value_len;
+} lmjcore_value_descriptor;
+
 // 统一返回结构（完全自包含在result_buf中）
 typedef struct {
     // 错误报告
@@ -102,8 +107,11 @@ typedef struct {
     uint8_t error_count;
     
     // 对象数据布局信息
-    size_t member_count;
-    lmjcore_member_descriptor* members;
+    size_t count;
+    union {
+        lmjcore_member_descriptor* members;
+        lmjcore_value_descriptor* value;
+    }descriptor;
 } lmjcore_result;
 
 
@@ -157,7 +165,7 @@ int lmjcore_arr_append(lmjcore_txn* txn, const lmjcore_ptr* arr_ptr,
 int lmjcore_arr_get(lmjcore_txn* txn, const lmjcore_ptr* arr_ptr,
                     lmjcore_query_mode mode,
                     uint8_t* result_buf, size_t result_buf_size,
-                    lmjcore_result* result);
+                    lmjcore_result** result_head);
 
 // 数组工具函数
 int lmjcore_arr_stat_element(lmjcore_txn* txn,lmjcore_ptr* ptr,

@@ -52,11 +52,13 @@ flowchart TD
 ### 四、数据写入流程（对象创建）
 ```mermaid
 flowchart TD
-    A[上层调用创建对象] --> B[生成唯一指针<br>（UUID/ULID/自增ID）]
-    B --> C[在arr库中注册对象成员列表]
-    C --> D[在main库中写入各成员值]
-    D --> E[同一事务内原子提交]
-    E --> F[返回指针给上层]
+    A[上层调用创建对象] --> B[生成唯一指针]
+    B --> C{操作类型?}
+    C -->|注册成员| D[调用 lmjcore_register_member]
+    C -->|创建并赋值成员| E[在arr库注册成员列表]
+    D --> F[提交事务]
+    E --> G[在main库写入成员值]
+    G --> F
 ```
 
 ---

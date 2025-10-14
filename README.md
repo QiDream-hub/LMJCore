@@ -189,7 +189,7 @@ make
 
 ## 🤝 贡献指南
 
-我们欢迎各种形式的贡献！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详情。
+我们欢迎各种形式的贡献！
 
 1. Fork 本仓库
 2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)

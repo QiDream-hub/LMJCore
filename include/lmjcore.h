@@ -25,7 +25,7 @@ extern "C" {
 
 // 实体类型枚举
 typedef enum {
-    LMJCORE_OBJ = 0x01,  // 普通对象
+    LMJCORE_OBJ = 0x01,  // 对象
     LMJCORE_ARR = 0x02,  // 数组
 } lmjcore_entity_type;
 
@@ -50,6 +50,15 @@ typedef enum {
     LMJCORE_READERR_LMDB_FAILED,            // LMDB操作失败
     LMJCORE_READERR_MEMORY_ALLOCATION_FAILED,// 内存申请失败
 } lmjcore_read_error_code;
+
+typedef enum{
+    // 幽灵对象(最高警报)
+    LMJCORE_AUDITERR_GHOST_OBJECT = -1, // 幽灵对象：指针在main库中存在数据但未在arr库注册
+    // 幽灵成员(最高警报)
+    LMJCORE_AUDITERR_GHOST_MEMBER = -2, // 幽灵成员：在main库中存在但未在arr成员列表中注册
+    // 缺失值(警告)
+    LMJCORE_AUDITERR_MISSING_VALUE = -3 // 缺失值：在arr库中注册但未在main库赋值
+} lmjcore_audit_error_code;
 
 // 17字节指针结构
 typedef struct {
@@ -114,11 +123,17 @@ typedef struct {
     }descriptor;
 } lmjcore_result;
 
+typedef struct{
+    lmjcore_ptr ptr;
+    uint8_t member_offset; // 成员名偏移量
+    uint8_t member_len;
+    lmjcore_audit_error_code error;
+} lmjcore_audit_descriptor; 
 
 // 审计报告结构
 typedef struct {
-    const uint8_t* report;    // 审计报告数据
-    size_t report_size;       // 报告大小
+    lmjcore_audit_descriptor* audit_descriptor;
+    size_t audit_cont; // 报告数量
 } lmjcore_audit_report;
 
 // 初始化函数
@@ -168,7 +183,7 @@ int lmjcore_arr_get(lmjcore_txn* txn, const lmjcore_ptr* arr_ptr,
                     lmjcore_result** result_head);
 
 // 数组工具函数
-int lmjcore_arr_stat_element(lmjcore_txn* txn,lmjcore_ptr* ptr,
+int lmjcore_arr_stat_element(lmjcore_txn* txn,const lmjcore_ptr* ptr,
                         size_t* total_value_len_out,
                         size_t* element_count_out);
 
@@ -182,7 +197,7 @@ int lmjcore_exist(lmjcore_txn* txn, const lmjcore_ptr* ptr);
 // 审计与修复
 int lmjcore_audit_object(lmjcore_txn* txn, const lmjcore_ptr* obj_ptr,
                          uint8_t* report_buf, size_t report_buf_size,
-                         lmjcore_audit_report* report);
+                         lmjcore_audit_report** report_head);
 int lmjcore_repair_object(lmjcore_txn* txn, const lmjcore_ptr* obj_ptr,
                           const uint8_t* member_name, size_t member_name_len);
 

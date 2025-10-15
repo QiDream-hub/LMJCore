@@ -60,7 +60,7 @@ int main() {
 
   if (rc == LMJCORE_SUCCESS) {
     for (size_t i = 0; i < result->count; i++) {
-      lmjcore_member_descriptor *desc = &result->descriptor.members[i];
+      lmjcore_obj_descriptor *desc = &result->descriptor.object_descriptors[i];
       char *member_name = (char *)(result_buf + desc->name_offset);
       uint8_t *value = result_buf + desc->value_offset;
 

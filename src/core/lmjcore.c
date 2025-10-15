@@ -5,42 +5,42 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <time.h>
 #include <uuid/uuid.h>
 
 #define MAIN_DB_NAME "main"
 #define ARR_DB_NAME "arr"
-#define MAX_MEMBER_LENGTH 493  // 511 - 17 - 1
+#define MAX_MEMBER_LENGTH 493 // 511 - 17 - 1
 
 /*
-*==========================================
-*内部结构
-*==========================================
-*/
+ *==========================================
+ *内部结构
+ *==========================================
+ */
 // 环境结构
 struct lmjcore_env {
-    MDB_env* mdb_env;
-    MDB_dbi main_dbi;
-    MDB_dbi arr_dbi;
-    lmjcore_ptr_generator_fn ptr_generator;
-    void* ptr_gen_ctx;
+  MDB_env *mdb_env;
+  MDB_dbi main_dbi;
+  MDB_dbi arr_dbi;
+  lmjcore_ptr_generator_fn ptr_generator;
+  void *ptr_gen_ctx;
 };
 
 // 事务结构
 struct lmjcore_txn {
-    lmjcore_env* env;
-    MDB_txn* mdb_txn;
-    lmjcore_txn_type type;
+  lmjcore_env *env;
+  MDB_txn *mdb_txn;
+  lmjcore_txn_type type;
 };
 
 /*
-*==========================================
-*内部工具函数
-*==========================================
-*/
+ *==========================================
+ *内部工具函数
+ *==========================================
+ */
 
 /**
  * @brief 检查MDB_val的key是否以指定的对象指针开头
@@ -48,8 +48,8 @@ struct lmjcore_txn {
  * @param key LMDB的key值
  * @return true表示属于该对象，false表示不属于
  */
-static inline bool OBJ_KEY_PREFIX(const lmjcore_ptr* obj_ptr, MDB_val key) {
-    return (key.mv_size >= 17) && (memcmp(key.mv_data, obj_ptr->data, 17) == 0);
+static inline bool OBJ_KEY_PREFIX(const lmjcore_ptr *obj_ptr, MDB_val key) {
+  return (key.mv_size >= 17) && (memcmp(key.mv_data, obj_ptr->data, 17) == 0);
 }
 
 /**
@@ -62,454 +62,527 @@ static inline bool OBJ_KEY_PREFIX(const lmjcore_ptr* obj_ptr, MDB_val key) {
  * @param error_code 底层错误代码
  * @return 是否成功添加错误（如果错误数已达上限则返回false）
  */
-static bool add_error_to_result(lmjcore_result* result, 
-                               lmjcore_read_error_code code,
-                               const lmjcore_ptr* entity_ptr,
-                               uint32_t member_offset,
-                               uint16_t member_len,
-                               int error_code) {
-    if (result->error_count >= LMJCORE_MAX_READ_ERRORS) {
-        return false;
-    }
-    
-    lmjcore_read_error* error = &result->errors[result->error_count];
-    error->code = code;
-    error->entity_ptr = *entity_ptr;
-    
-    switch (code) {
-        case LMJCORE_READERR_MEMBER_MISSING:
-            error->context.member.member_offset = member_offset;
-            error->context.member.member_len = member_len;
-            break;
-        case LMJCORE_READERR_BUFFER_TOO_SMALL:
-        case LMJCORE_READERR_LMDB_FAILED:
-        case LMJCORE_READERR_MEMORY_ALLOCATION_FAILED:
-            error->context.error_code.code = error_code;
-            break;
-        case LMJCORE_READERR_ENTITY_NOT_FOUND:
-        case LMJCORE_READERR_NONE:
-        default:
-            // 不需要额外的上下文信息
-            break;
-    }
-    
-    result->error_count++;
-    return true;
+static bool add_error_to_result(lmjcore_result *result,
+                                lmjcore_read_error_code code,
+                                const lmjcore_ptr *entity_ptr,
+                                uint32_t member_offset, uint16_t member_len,
+                                int error_code) {
+  if (result->error_count >= LMJCORE_MAX_READ_ERRORS) {
+    return false;
+  }
+
+  lmjcore_read_error *error = &result->errors[result->error_count];
+  error->code = code;
+  error->entity_ptr = *entity_ptr;
+
+  switch (code) {
+  case LMJCORE_READERR_MEMBER_MISSING:
+    error->context.member.member_offset = member_offset;
+    error->context.member.member_len = member_len;
+    break;
+  case LMJCORE_READERR_BUFFER_TOO_SMALL:
+  case LMJCORE_READERR_LMDB_FAILED:
+  case LMJCORE_READERR_MEMORY_ALLOCATION_FAILED:
+    error->context.error_code.code = error_code;
+    break;
+  case LMJCORE_READERR_ENTITY_NOT_FOUND:
+  case LMJCORE_READERR_NONE:
+  default:
+    // 不需要额外的上下文信息
+    break;
+  }
+
+  result->error_count++;
+  return true;
 }
 
 /**
  * @brief 添加缓冲区不足错误
  */
-static bool add_buffer_error(lmjcore_result* result, const lmjcore_ptr* entity_ptr) {
-    return add_error_to_result(result, LMJCORE_READERR_BUFFER_TOO_SMALL, 
+static bool add_buffer_error(lmjcore_result *result,
+                             const lmjcore_ptr *entity_ptr) {
+  return add_error_to_result(result, LMJCORE_READERR_BUFFER_TOO_SMALL,
                              entity_ptr, 0, 0, LMJCORE_ERROR_BUFFER_TOO_SMALL);
 }
 
 /**
  * @brief 添加实体未找到错误
  */
-static bool add_entity_not_found_error(lmjcore_result* result, const lmjcore_ptr* entity_ptr) {
-    return add_error_to_result(result, LMJCORE_READERR_ENTITY_NOT_FOUND, 
+static bool add_entity_not_found_error(lmjcore_result *result,
+                                       const lmjcore_ptr *entity_ptr) {
+  return add_error_to_result(result, LMJCORE_READERR_ENTITY_NOT_FOUND,
                              entity_ptr, 0, 0, 0);
 }
 
 /**
  * @brief 添加LMDB操作错误
  */
-static bool add_lmdb_error(lmjcore_result* result, const lmjcore_ptr* entity_ptr, int error_code) {
-    return add_error_to_result(result, LMJCORE_READERR_LMDB_FAILED, 
-                             entity_ptr, 0, 0, error_code);
+static bool add_lmdb_error(lmjcore_result *result,
+                           const lmjcore_ptr *entity_ptr, int error_code) {
+  return add_error_to_result(result, LMJCORE_READERR_LMDB_FAILED, entity_ptr, 0,
+                             0, error_code);
 }
 
 /**
  * @brief 添加成员缺失错误
  */
-static bool add_member_missing_error(lmjcore_result* result, const lmjcore_ptr* entity_ptr,
-                                   uint32_t member_offset, uint16_t member_len) {
-    return add_error_to_result(result, LMJCORE_READERR_MEMBER_MISSING, 
-                             entity_ptr, member_offset, member_len, 0);
+static bool add_member_missing_error(lmjcore_result *result,
+                                     const lmjcore_ptr *entity_ptr,
+                                     uint32_t member_offset,
+                                     uint16_t member_len) {
+  return add_error_to_result(result, LMJCORE_READERR_MEMBER_MISSING, entity_ptr,
+                             member_offset, member_len, 0);
 }
 
 /**
  * @brief 释放指针数组
- * 
+ *
  * @param arr 指针数组
  * @param arr_count 元素数量
- * @return true 
- * @return false 
+ * @return true
+ * @return false
  */
-static bool free_arr_memry(void* arr[],size_t arr_count){
-    if (!arr || arr_count < 1) {
-        return false;
+static void free_mdb_val_array(MDB_val **arr, size_t count) {
+  if (!arr)
+    return;
+  for (size_t i = 0; i < count; i++) {
+    if (arr[i]) {
+      free(arr[i]->mv_data); // 先释放数据
+      free(arr[i]);          // 再释放结构体
     }
-    for (int i = 0; i < arr_count; i++) {
-        free(arr[i]);
-    }
-    free(arr);
-    return true;
+  }
 }
 
-static int add_auit(lmjcore_audit_report *report, uint8_t* buf,
-    lmjcore_audit_error_code error, MDB_val *value,
-    const lmjcore_ptr *obj_ptr, size_t* data_offtset, size_t* report_offset){
-    if (!report || !buf || !value || !obj_ptr || !data_offtset || !report_offset) {
+static int add_audit(lmjcore_audit_report *report, uint8_t *buf,
+                     lmjcore_audit_error_code error, MDB_val *member_name,
+                     const lmjcore_ptr *obj_ptr, size_t *data_offset,
+                     size_t *report_descriptor_offset) {
+    if (!report || !buf || !member_name || !obj_ptr || !data_offset || !report_descriptor_offset) {
         return LMJCORE_ERROR_INVALID_PARAM;
     }
-    *data_offtset -= value->mv_size;
-    *report_offset += sizeof(lmjcore_audit_report);
-    if (*data_offtset < *report_offset) {
-        return  LMJCORE_ERROR_BUFFER_TOO_SMALL;
+
+    size_t needed = member_name->mv_size;
+    size_t desc_size = sizeof(lmjcore_audit_descriptor);
+
+    // 检查空间是否足够
+    if (*report_descriptor_offset + desc_size > *data_offset) {
+        return LMJCORE_ERROR_BUFFER_TOO_SMALL;
     }
-    memcpy(buf + *data_offtset, value->mv_data, value->mv_size);
-    report->audit_descriptor[report->audit_cont].error = error;
-    report->audit_descriptor[report->audit_cont].ptr = *obj_ptr;
-    report->audit_descriptor[report->audit_cont].member_offset = *data_offtset;
-    report->audit_descriptor[report->audit_cont].member_len = value->mv_size;
+
+    // 写入成员名（从后往前）
+    *data_offset -= needed;
+    memcpy(buf + *data_offset, member_name->mv_data, needed);
+
+    // 写入描述符
+    lmjcore_audit_descriptor *desc = &report->audit_descriptor[report->audit_cont];
+    desc->error = error;
+    desc->ptr = *obj_ptr;
+    desc->member_offset = *data_offset;
+    desc->member_len = needed;
     report->audit_cont++;
+
+    *report_descriptor_offset += desc_size;
     return LMJCORE_SUCCESS;
+}
+
+static int audit_obj_scanner(MDB_cursor *cursor, MDB_val key, MDB_val value,
+                             int op, MDB_val *arr_value[],
+                             size_t arr_value_count, const lmjcore_ptr *obj_ptr,
+                             uint8_t *report_buf,
+                             size_t report_descriptor_offset,
+                             size_t data_offset, lmjcore_audit_report *report) {
+  int rc = mdb_cursor_get(cursor, &key, &value, op);
+  if (rc != MDB_SUCCESS) {
+    mdb_cursor_close(cursor);
+    free_mdb_val_array(arr_value, arr_value_count);
+    return rc;
+  }
+
+  while (rc == MDB_SUCCESS) {
+    if (!OBJ_KEY_PREFIX(obj_ptr, key))
+      break;
+    bool found = false;
+    for (size_t i = 0; i < arr_value_count; i++) {
+      if (arr_value[i] && !memcmp(key.mv_data + 17, arr_value[i]->mv_data,
+                                  arr_value[i]->mv_size)) {
+        // 找到对应成员名(不是幽灵成员)
+        free(arr_value[i]);
+        arr_value[i] = NULL;
+        found = true;
+        break;
+      }
+    }
+    // 遍历完成没有找到匹配的成员名(缺失值)
+    if (!found) {
+      int r =
+          add_audit(report, report_buf, LMJCORE_AUDITERR_GHOST_MEMBER, &value,
+                   obj_ptr, &data_offset, &report_descriptor_offset);
+      if (r != LMJCORE_SUCCESS) {
+        free_mdb_val_array(arr_value, arr_value_count);
+        mdb_cursor_close(cursor);
+        return r;
+      }
+    }
+    rc = mdb_cursor_get(cursor, &key, &value, MDB_PREV);
+  }
+  return LMJCORE_SUCCESS;
 }
 
 // 默认指针生成器 (UUIDv4)
-static int default_ptr_generator(void* ctx, uint8_t out[17]) {
-    uuid_t uuid;
-    uuid_generate(uuid);
-    
-    // 设置类型前缀为对象类型（上层可覆盖）
-    out[0] = LMJCORE_OBJ;
-    
-    // 复制UUID到后16字节
-    memcpy(out + 1, uuid, 16);
-    return LMJCORE_SUCCESS;
+static int default_ptr_generator(void *ctx, uint8_t out[17]) {
+  uuid_t uuid;
+  uuid_generate(uuid);
+
+  // 设置类型前缀为对象类型（上层可覆盖）
+  out[0] = LMJCORE_OBJ;
+
+  // 复制UUID到后16字节
+  memcpy(out + 1, uuid, 16);
+  return LMJCORE_SUCCESS;
 }
 
 // 初始化函数
-int lmjcore_init(const char* path, size_t map_size, 
-                 lmjcore_ptr_generator_fn ptr_gen, void* ptr_gen_ctx,
-                 lmjcore_env** env) {
-    if (!path || !env) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    lmjcore_env* new_env = calloc(1, sizeof(lmjcore_env));
-    if (!new_env) {
-        return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
-    }
-    
-    // 设置指针生成器
-    if (ptr_gen) {
-        new_env->ptr_generator = ptr_gen;
-        new_env->ptr_gen_ctx = ptr_gen_ctx;
-    } else {
-        new_env->ptr_generator = default_ptr_generator;
-        new_env->ptr_gen_ctx = NULL;
-    }
-    
-    // 初始化 LMDB 环境
-    int rc = mdb_env_create(&new_env->mdb_env);
-    if (rc != MDB_SUCCESS) {
-        free(new_env);
-        return rc;
-    }
-    
-    // 设置映射大小
-    rc = mdb_env_set_mapsize(new_env->mdb_env, map_size);
-    if (rc != MDB_SUCCESS) {
-        mdb_env_close(new_env->mdb_env);
-        free(new_env);
-        return rc;
-    }
+int lmjcore_init(const char *path, size_t map_size,
+                 lmjcore_ptr_generator_fn ptr_gen, void *ptr_gen_ctx,
+                 lmjcore_env **env) {
+  if (!path || !env) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
 
-    // 设置数据库数量(main,arr)
-    rc = mdb_env_set_maxdbs(new_env->mdb_env, 2);
-    if (rc != MDB_SUCCESS) {
-        mdb_env_close(new_env->mdb_env);
-        free(new_env);
-        return rc;
-    }
-    
-    // 打开mdb的环境
-    rc = mdb_env_open(new_env->mdb_env, path, 0, 0664);
-    if (rc != MDB_SUCCESS) {
-        mdb_env_close(new_env->mdb_env);
-        free(new_env);
-        return rc;
-    }
-    
-    // 打开数据库
-    MDB_txn* txn;
-    rc = mdb_txn_begin(new_env->mdb_env, NULL, 0, &txn);
-    if (rc != MDB_SUCCESS) {
-        mdb_env_close(new_env->mdb_env);
-        free(new_env);
-        return rc;
-    }
-    // 打开mian数据库
-    rc = mdb_dbi_open(txn, MAIN_DB_NAME, MDB_CREATE, &new_env->main_dbi);
-    if (rc != MDB_SUCCESS) {
-        mdb_txn_abort(txn);
-        mdb_env_close(new_env->mdb_env);
-        free(new_env);
-        return rc;
-    }
+  lmjcore_env *new_env = calloc(1, sizeof(lmjcore_env));
+  if (!new_env) {
+    return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
+  }
 
-   // 打开arr数据库
-    rc = mdb_dbi_open(txn, ARR_DB_NAME, MDB_CREATE | MDB_DUPSORT, &new_env->arr_dbi);
-    if (rc != MDB_SUCCESS) {
-        mdb_txn_abort(txn);
-        mdb_env_close(new_env->mdb_env);
-        free(new_env);
-        return rc;
-    }
-    mdb_txn_commit(txn);
-    *env = new_env;
-    
-    return LMJCORE_SUCCESS;
+  // 设置指针生成器
+  if (ptr_gen) {
+    new_env->ptr_generator = ptr_gen;
+    new_env->ptr_gen_ctx = ptr_gen_ctx;
+  } else {
+    new_env->ptr_generator = default_ptr_generator;
+    new_env->ptr_gen_ctx = NULL;
+  }
+
+  // 初始化 LMDB 环境
+  int rc = mdb_env_create(&new_env->mdb_env);
+  if (rc != MDB_SUCCESS) {
+    free(new_env);
+    return rc;
+  }
+
+  // 设置映射大小
+  rc = mdb_env_set_mapsize(new_env->mdb_env, map_size);
+  if (rc != MDB_SUCCESS) {
+    mdb_env_close(new_env->mdb_env);
+    free(new_env);
+    return rc;
+  }
+
+  // 设置数据库数量(main,arr)
+  rc = mdb_env_set_maxdbs(new_env->mdb_env, 2);
+  if (rc != MDB_SUCCESS) {
+    mdb_env_close(new_env->mdb_env);
+    free(new_env);
+    return rc;
+  }
+
+  // 打开mdb的环境
+  rc = mdb_env_open(new_env->mdb_env, path, 0, 0664);
+  if (rc != MDB_SUCCESS) {
+    mdb_env_close(new_env->mdb_env);
+    free(new_env);
+    return rc;
+  }
+
+  // 打开数据库
+  MDB_txn *txn;
+  rc = mdb_txn_begin(new_env->mdb_env, NULL, 0, &txn);
+  if (rc != MDB_SUCCESS) {
+    mdb_env_close(new_env->mdb_env);
+    free(new_env);
+    return rc;
+  }
+  // 打开mian数据库
+  rc = mdb_dbi_open(txn, MAIN_DB_NAME, MDB_CREATE, &new_env->main_dbi);
+  if (rc != MDB_SUCCESS) {
+    mdb_txn_abort(txn);
+    mdb_env_close(new_env->mdb_env);
+    free(new_env);
+    return rc;
+  }
+
+  // 打开arr数据库
+  rc = mdb_dbi_open(txn, ARR_DB_NAME, MDB_CREATE | MDB_DUPSORT,
+                    &new_env->arr_dbi);
+  if (rc != MDB_SUCCESS) {
+    mdb_txn_abort(txn);
+    mdb_env_close(new_env->mdb_env);
+    free(new_env);
+    return rc;
+  }
+  mdb_txn_commit(txn);
+  *env = new_env;
+
+  return LMJCORE_SUCCESS;
 }
 
 // 清理函数
-int lmjcore_cleanup(lmjcore_env* env) {
-    if (!env) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    mdb_dbi_close(env->mdb_env, env->main_dbi);
-    mdb_dbi_close(env->mdb_env, env->arr_dbi);
-    mdb_env_close(env->mdb_env);
-    free(env);
-    
-    return LMJCORE_SUCCESS;
+int lmjcore_cleanup(lmjcore_env *env) {
+  if (!env) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  mdb_dbi_close(env->mdb_env, env->main_dbi);
+  mdb_dbi_close(env->mdb_env, env->arr_dbi);
+  mdb_env_close(env->mdb_env);
+  free(env);
+
+  return LMJCORE_SUCCESS;
 }
 
 // 事务开始
-int lmjcore_txn_begin(lmjcore_env* env, lmjcore_txn_type type, lmjcore_txn** txn) {
-    if (!env || !txn) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    lmjcore_txn* new_txn = calloc(1, sizeof(lmjcore_txn));
-    if (!new_txn) {
-        return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
-    }
-    
-    new_txn->env = env;
-    new_txn->type = type;
-    
-    int mdb_flags = (type == LMJCORE_TXN_READONLY) ? MDB_RDONLY : 0;
-    int rc = mdb_txn_begin(env->mdb_env, NULL, mdb_flags, &new_txn->mdb_txn);
-    if (rc != MDB_SUCCESS) {
-        free(new_txn);
-        return rc;
-    }
-    
-    *txn = new_txn;
-    return LMJCORE_SUCCESS;
+int lmjcore_txn_begin(lmjcore_env *env, lmjcore_txn_type type,
+                      lmjcore_txn **txn) {
+  if (!env || !txn) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  lmjcore_txn *new_txn = calloc(1, sizeof(lmjcore_txn));
+  if (!new_txn) {
+    return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
+  }
+
+  new_txn->env = env;
+  new_txn->type = type;
+
+  int mdb_flags = (type == LMJCORE_TXN_READONLY) ? MDB_RDONLY : 0;
+  int rc = mdb_txn_begin(env->mdb_env, NULL, mdb_flags, &new_txn->mdb_txn);
+  if (rc != MDB_SUCCESS) {
+    free(new_txn);
+    return rc;
+  }
+
+  *txn = new_txn;
+  return LMJCORE_SUCCESS;
 }
 
 // 事务提交
-int lmjcore_txn_commit(lmjcore_txn* txn) {
-    if (!txn) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    int rc = mdb_txn_commit(txn->mdb_txn);
-    free(txn);
-    
-    if (rc != MDB_SUCCESS) {
-        return rc;
-    }
-    
-    return LMJCORE_SUCCESS;
+int lmjcore_txn_commit(lmjcore_txn *txn) {
+  if (!txn) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  int rc = mdb_txn_commit(txn->mdb_txn);
+  free(txn);
+
+  if (rc != MDB_SUCCESS) {
+    return rc;
+  }
+
+  return LMJCORE_SUCCESS;
 }
 
 // 事务中止
-int lmjcore_txn_abort(lmjcore_txn* txn) {
-    if (!txn) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    mdb_txn_abort(txn->mdb_txn);
-    free(txn);
-    
-    return LMJCORE_SUCCESS;
+int lmjcore_txn_abort(lmjcore_txn *txn) {
+  if (!txn) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  mdb_txn_abort(txn->mdb_txn);
+  free(txn);
+
+  return LMJCORE_SUCCESS;
 }
 
 // 创建对象
-int lmjcore_obj_create(lmjcore_txn* txn, lmjcore_ptr* ptr) {
-    if (!txn || !ptr || txn->type != LMJCORE_TXN_WRITE) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    // 生成指针
-    int rc = txn->env->ptr_generator(txn->env->ptr_gen_ctx, ptr->data);
-    if (rc != LMJCORE_SUCCESS) {
-        return rc;
-    }
-    
-    // 确保指针类型为对象
-    ptr->data[0] = LMJCORE_OBJ;
-    
-    return LMJCORE_SUCCESS;
+int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr *ptr) {
+  if (!txn || !ptr || txn->type != LMJCORE_TXN_WRITE) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  // 生成指针
+  int rc = txn->env->ptr_generator(txn->env->ptr_gen_ctx, ptr->data);
+  if (rc != LMJCORE_SUCCESS) {
+    return rc;
+  }
+
+  // 确保指针类型为对象
+  ptr->data[0] = LMJCORE_OBJ;
+
+  return LMJCORE_SUCCESS;
 }
 
 // 对象成员写入
-int lmjcore_obj_put(lmjcore_txn* txn, const lmjcore_ptr* obj_ptr, 
-                    const uint8_t* member_name, size_t member_name_len,
-                    const uint8_t* value, size_t value_len) {
-    if (!txn || !obj_ptr || !member_name || txn->type != LMJCORE_TXN_WRITE) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    // 检查成员名长度
-    if (member_name_len > MAX_MEMBER_LENGTH) {
-        return LMJCORE_ERROR_MEMBER_TOO_LONG;
+int lmjcore_obj_put(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                    const uint8_t *member_name, size_t member_name_len,
+                    const uint8_t *value, size_t value_len) {
+  if (!txn || !obj_ptr || !member_name || txn->type != LMJCORE_TXN_WRITE) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  // 检查成员名长度
+  if (member_name_len > MAX_MEMBER_LENGTH) {
+    return LMJCORE_ERROR_MEMBER_TOO_LONG;
+  }
+
+  // 在 arr 数据库中注册成员名（如果尚未注册）
+  MDB_val arr_key = {.mv_size = 17, .mv_data = (void *)obj_ptr->data};
+  MDB_val arr_val = {.mv_size = member_name_len,
+                     .mv_data = (void *)member_name};
+
+  // 使用lmdb数据库的原生检查插入
+  int rc = mdb_put(txn->mdb_txn, txn->env->arr_dbi, &arr_key, &arr_val,
+                   MDB_NODUPDATA);
+  // 有重复的值
+  if (rc == MDB_KEYEXIST || rc == MDB_SUCCESS) {
+    // 构建主键：对象指针 + 成员名
+    size_t key_size = 17 + member_name_len;
+    uint8_t *key = malloc(key_size);
+    if (!key) {
+      return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
     }
 
-    // 在 arr 数据库中注册成员名（如果尚未注册）
-    MDB_val arr_key = { .mv_size = 17, .mv_data = (void*)obj_ptr->data };
-    MDB_val arr_val = { .mv_size = member_name_len, .mv_data = (void*)member_name };
+    memcpy(key, obj_ptr->data, 17);
+    memcpy(key + 17, member_name, member_name_len);
 
-    // 使用lmdb数据库的原生检查插入
-    int rc = mdb_put(txn->mdb_txn, txn->env->arr_dbi, &arr_key, &arr_val, MDB_NODUPDATA);
-    // 有重复的值
-    if (rc == MDB_KEYEXIST || rc == MDB_SUCCESS) {
-        // 构建主键：对象指针 + 成员名
-        size_t key_size = 17 + member_name_len;
-        uint8_t* key = malloc(key_size);
-        if (!key) {
-            return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
-        }
-    
-        memcpy(key, obj_ptr->data, 17);
-        memcpy(key + 17, member_name, member_name_len);
-    
-        // 写入 main 数据库
-        MDB_val mdb_key = { .mv_size = key_size, .mv_data = key };
-        MDB_val mdb_val = { .mv_size = value_len, .mv_data = (void*)value };
-    
-        rc = mdb_put(txn->mdb_txn, txn->env->main_dbi, &mdb_key, &mdb_val, 0);
-        free(key);
-    
-        if (rc != MDB_SUCCESS) {
-            return rc;
-        }
+    // 写入 main 数据库
+    MDB_val mdb_key = {.mv_size = key_size, .mv_data = key};
+    MDB_val mdb_val = {.mv_size = value_len, .mv_data = (void *)value};
+
+    rc = mdb_put(txn->mdb_txn, txn->env->main_dbi, &mdb_key, &mdb_val, 0);
+    free(key);
+
+    if (rc != MDB_SUCCESS) {
+      return rc;
     }
-   
-    return rc;
+  }
+
+  return rc;
 }
 
 // 指针转字符串
-int lmjcore_ptr_to_string(const lmjcore_ptr* ptr, char* str_buf, size_t buf_size) {
-    if (!ptr || !str_buf || buf_size < 34) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    const char hex_chars[] = "0123456789abcdef";
-    for (int i = 0; i < 17; i++) {
-        uint8_t byte = ptr->data[i];
-        str_buf[i * 2] = hex_chars[(byte >> 4) & 0x0F];
-        str_buf[i * 2 + 1] = hex_chars[byte & 0x0F];
-    }
-    str_buf[34] = '\0';
-    
-    return LMJCORE_SUCCESS;
+int lmjcore_ptr_to_string(const lmjcore_ptr *ptr, char *str_buf,
+                          size_t buf_size) {
+  if (!ptr || !str_buf || buf_size < 34) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  const char hex_chars[] = "0123456789abcdef";
+  for (int i = 0; i < 17; i++) {
+    uint8_t byte = ptr->data[i];
+    str_buf[i * 2] = hex_chars[(byte >> 4) & 0x0F];
+    str_buf[i * 2 + 1] = hex_chars[byte & 0x0F];
+  }
+  str_buf[34] = '\0';
+
+  return LMJCORE_SUCCESS;
 }
 
 // 字符串转指针
-int lmjcore_ptr_from_string(const char* str, lmjcore_ptr* ptr) {
-    if (!str || !ptr || strlen(str) != 34) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    for (int i = 0; i < 17; i++) {
-        char high = str[i * 2];
-        char low = str[i * 2 + 1];
-        
-        if (high >= '0' && high <= '9') high = high - '0';
-        else if (high >= 'a' && high <= 'f') high = high - 'a' + 10;
-        else if (high >= 'A' && high <= 'F') high = high - 'A' + 10;
-        else return LMJCORE_ERROR_INVALID_POINTER;
-        
-        if (low >= '0' && low <= '9') low = low - '0';
-        else if (low >= 'a' && low <= 'f') low = low - 'a' + 10;
-        else if (low >= 'A' && low <= 'F') low = low - 'A' + 10;
-        else return LMJCORE_ERROR_INVALID_POINTER;
-        
-        ptr->data[i] = (high << 4) | low;
-    }
-    
-    return LMJCORE_SUCCESS;
+int lmjcore_ptr_from_string(const char *str, lmjcore_ptr *ptr) {
+  if (!str || !ptr || strlen(str) != 34) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  for (int i = 0; i < 17; i++) {
+    char high = str[i * 2];
+    char low = str[i * 2 + 1];
+
+    if (high >= '0' && high <= '9')
+      high = high - '0';
+    else if (high >= 'a' && high <= 'f')
+      high = high - 'a' + 10;
+    else if (high >= 'A' && high <= 'F')
+      high = high - 'A' + 10;
+    else
+      return LMJCORE_ERROR_INVALID_POINTER;
+
+    if (low >= '0' && low <= '9')
+      low = low - '0';
+    else if (low >= 'a' && low <= 'f')
+      low = low - 'a' + 10;
+    else if (low >= 'A' && low <= 'F')
+      low = low - 'A' + 10;
+    else
+      return LMJCORE_ERROR_INVALID_POINTER;
+
+    ptr->data[i] = (high << 4) | low;
+  }
+
+  return LMJCORE_SUCCESS;
 }
 
 // 存在性检查
-int lmjcore_exist(lmjcore_txn* txn, const lmjcore_ptr* ptr) {
-    if (!txn || !ptr) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    MDB_val key = { .mv_size = 17, .mv_data = (void*)ptr->data };
-    MDB_val data;
-    
-    // 在 arr 数据库中查找
-    int rc = mdb_get(txn->mdb_txn, txn->env->arr_dbi, &key, &data);
-    if (rc == MDB_NOTFOUND) {
-        return 0; // 不存在
-    }
+int lmjcore_exist(lmjcore_txn *txn, const lmjcore_ptr *ptr) {
+  if (!txn || !ptr) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
 
-    if (rc == MDB_SUCCESS) {
-        return 1; // 存在
-    }
+  MDB_val key = {.mv_size = 17, .mv_data = (void *)ptr->data};
+  MDB_val data;
 
-    // 其他返回mdb_get
-    return rc;
+  // 在 arr 数据库中查找
+  int rc = mdb_get(txn->mdb_txn, txn->env->arr_dbi, &key, &data);
+  if (rc == MDB_NOTFOUND) {
+    return 0; // 不存在
+  }
+
+  if (rc == MDB_SUCCESS) {
+    return 1; // 存在
+  }
+
+  // 其他返回mdb_get
+  return rc;
 }
 
 // 创建数组
-int lmjcore_arr_create(lmjcore_txn* txn, lmjcore_ptr* ptr) {
-    if (!txn || !ptr || txn->type != LMJCORE_TXN_WRITE) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    // 生成指针
-    int rc = txn->env->ptr_generator(txn->env->ptr_gen_ctx, ptr->data);
-    if (rc != LMJCORE_SUCCESS) {
-        return rc;
-    }
-    
-    // 确保指针类型为数组
-    ptr->data[0] = LMJCORE_ARR;
+int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr *ptr) {
+  if (!txn || !ptr || txn->type != LMJCORE_TXN_WRITE) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
 
-    // 在 arr 数据库中创建空成员列表（不存储任何值，仅表示对象存在）
-    MDB_val key, data;
-    key.mv_data = ptr->data;
-    key.mv_size = 17;
-    
-    data.mv_data = NULL;
-    data.mv_size = 0;
-    
-    rc = mdb_put(txn->mdb_txn, txn->env->arr_dbi, &key, &data, 0);
-    if (rc != MDB_SUCCESS) {
-        return rc;
-    }
-    
-    return LMJCORE_SUCCESS;
+  // 生成指针
+  int rc = txn->env->ptr_generator(txn->env->ptr_gen_ctx, ptr->data);
+  if (rc != LMJCORE_SUCCESS) {
+    return rc;
+  }
+
+  // 确保指针类型为数组
+  ptr->data[0] = LMJCORE_ARR;
+
+  // 在 arr 数据库中创建空成员列表（不存储任何值，仅表示对象存在）
+  MDB_val key, data;
+  key.mv_data = ptr->data;
+  key.mv_size = 17;
+
+  data.mv_data = NULL;
+  data.mv_size = 0;
+
+  rc = mdb_put(txn->mdb_txn, txn->env->arr_dbi, &key, &data, 0);
+  if (rc != MDB_SUCCESS) {
+    return rc;
+  }
+
+  return LMJCORE_SUCCESS;
 }
 
 // 数组追加元素
-int lmjcore_arr_append(lmjcore_txn* txn, const lmjcore_ptr* arr_ptr,
-                       const uint8_t* value, size_t value_len) {
-    if (!txn || !arr_ptr || !value || txn->type != LMJCORE_TXN_WRITE) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    
-    MDB_val key = { .mv_size = 17, .mv_data = (void*)arr_ptr->data };
-    MDB_val mdb_val = { .mv_size = value_len, .mv_data = (void*)value };
-    
-    int rc = mdb_put(txn->mdb_txn, txn->env->arr_dbi, &key, &mdb_val, MDB_APPENDDUP);
-    if (rc != MDB_SUCCESS) {
-        return rc;
-    }
-    
-    return LMJCORE_SUCCESS;
+int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
+                       const uint8_t *value, size_t value_len) {
+  if (!txn || !arr_ptr || !value || txn->type != LMJCORE_TXN_WRITE) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  MDB_val key = {.mv_size = 17, .mv_data = (void *)arr_ptr->data};
+  MDB_val mdb_val = {.mv_size = value_len, .mv_data = (void *)value};
+
+  int rc =
+      mdb_put(txn->mdb_txn, txn->env->arr_dbi, &key, &mdb_val, MDB_APPENDDUP);
+  if (rc != MDB_SUCCESS) {
+    return rc;
+  }
+
+  return LMJCORE_SUCCESS;
 }
 
 /**
@@ -522,360 +595,362 @@ int lmjcore_arr_append(lmjcore_txn* txn, const lmjcore_ptr* arr_ptr,
  * @param total_value_count_out 返回所有成员值的数量
  * @return 错误码
  */
-int lmjcore_obj_stat_values(lmjcore_txn* txn,
-                        const lmjcore_ptr* obj_ptr,
-                        const uint8_t* anchor_member,
-                        size_t anchor_member_len,
-                        size_t* total_value_len_out,
-                        size_t* total_value_count_out) {
-    if (!txn || !obj_ptr || !anchor_member || !total_value_len_out ||
-        anchor_member_len > MAX_MEMBER_LENGTH)
-        return LMJCORE_ERROR_INVALID_PARAM;
+int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                            const uint8_t *anchor_member,
+                            size_t anchor_member_len,
+                            size_t *total_value_len_out,
+                            size_t *total_value_count_out) {
+  if (!txn || !obj_ptr || !anchor_member || !total_value_len_out ||
+      anchor_member_len > MAX_MEMBER_LENGTH)
+    return LMJCORE_ERROR_INVALID_PARAM;
 
-    *total_value_len_out = 0;
-    *total_value_count_out = 0;
+  *total_value_len_out = 0;
+  *total_value_count_out = 0;
 
-    // 构建起始key
-    uint8_t start_key[17 + MAX_MEMBER_LENGTH];
-    memcpy(start_key, obj_ptr->data, 17);
-    memcpy(start_key + 17, anchor_member, anchor_member_len);
-    size_t start_key_len = 17 + anchor_member_len;
+  // 构建起始key
+  uint8_t start_key[17 + MAX_MEMBER_LENGTH];
+  memcpy(start_key, obj_ptr->data, 17);
+  memcpy(start_key + 17, anchor_member, anchor_member_len);
+  size_t start_key_len = 17 + anchor_member_len;
 
-    MDB_val key = { .mv_size = start_key_len, .mv_data = start_key };
-    MDB_val val;
-    MDB_cursor* cursor = NULL;
+  MDB_val key = {.mv_size = start_key_len, .mv_data = start_key};
+  MDB_val val;
+  MDB_cursor *cursor = NULL;
 
-    int rc = mdb_cursor_open(txn->mdb_txn, txn->env->main_dbi, &cursor);
-    if (rc != MDB_SUCCESS) return rc;
+  int rc = mdb_cursor_open(txn->mdb_txn, txn->env->main_dbi, &cursor);
+  if (rc != MDB_SUCCESS)
+    return rc;
 
-    /* 1. 精确匹配：锚点必须存在 */
-    rc = mdb_cursor_get(cursor, &key, &val, MDB_SET);
-    if (rc == MDB_NOTFOUND) {
-        mdb_cursor_close(cursor);
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-    if (rc != MDB_SUCCESS){
-        mdb_cursor_close(cursor);
-        return rc;
-    }
+  /* 1. 精确匹配：锚点必须存在 */
+  rc = mdb_cursor_get(cursor, &key, &val, MDB_SET);
+  if (rc == MDB_NOTFOUND) {
+    mdb_cursor_close(cursor);
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+  if (rc != MDB_SUCCESS) {
+    mdb_cursor_close(cursor);
+    return rc;
+  }
 
-    // 统计锚点成员的值大小
+  // 统计锚点成员的值大小
+  *total_value_len_out += val.mv_size;
+  *total_value_count_out += 1;
+
+  /* 2. 向后扫描（更大的key） */
+  rc = mdb_cursor_get(cursor, &key, &val, MDB_NEXT);
+  while (rc == MDB_SUCCESS) {
+    if (!OBJ_KEY_PREFIX(obj_ptr, key))
+      break;
     *total_value_len_out += val.mv_size;
     *total_value_count_out += 1;
-
-    /* 2. 向后扫描（更大的key） */
     rc = mdb_cursor_get(cursor, &key, &val, MDB_NEXT);
-    while (rc == MDB_SUCCESS) {
-        if (!OBJ_KEY_PREFIX(obj_ptr, key)) break;
-        *total_value_len_out += val.mv_size;
-        *total_value_count_out += 1;
-        rc = mdb_cursor_get(cursor, &key, &val, MDB_NEXT);
-    }
+  }
 
-    /* 3. 重新定位到锚点，然后向前扫描（更小的key） */
-    rc = mdb_cursor_get(cursor, &key, &val, MDB_SET);
-    if (rc != MDB_SUCCESS){
-        mdb_cursor_close(cursor);
-        return rc;
-    }
-
-    rc = mdb_cursor_get(cursor, &key, &val, MDB_PREV);
-    while (rc == MDB_SUCCESS) {
-        if (!OBJ_KEY_PREFIX(obj_ptr, key)) break;
-        *total_value_len_out += val.mv_size;
-        *total_value_count_out += 1;
-        rc = mdb_cursor_get(cursor, &key, &val, MDB_PREV);
-    }
-
+  /* 3. 重新定位到锚点，然后向前扫描（更小的key） */
+  rc = mdb_cursor_get(cursor, &key, &val, MDB_SET);
+  if (rc != MDB_SUCCESS) {
     mdb_cursor_close(cursor);
-    return LMJCORE_SUCCESS;
+    return rc;
+  }
+
+  rc = mdb_cursor_get(cursor, &key, &val, MDB_PREV);
+  while (rc == MDB_SUCCESS) {
+    if (!OBJ_KEY_PREFIX(obj_ptr, key))
+      break;
+    *total_value_len_out += val.mv_size;
+    *total_value_count_out += 1;
+    rc = mdb_cursor_get(cursor, &key, &val, MDB_PREV);
+  }
+
+  mdb_cursor_close(cursor);
+  return LMJCORE_SUCCESS;
 }
 /**
  * @brief 统计数组元素长度
- * 
+ *
  * @param txn 事务句柄
  * @param ptr 实体指针
  * @param total_elment_len_out 输出元素总长度
  * @param element_countout 输出元素计数
  * @return int 错误码
  */
-int lmjcore_arr_stat_element(lmjcore_txn* txn,const lmjcore_ptr* ptr,
-                        size_t* total_value_len_out,
-                        size_t* element_count_out){
-    if(!txn || !ptr || !total_value_len_out || !element_count_out){
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
+int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr *ptr,
+                             size_t *total_value_len_out,
+                             size_t *element_count_out) {
+  if (!txn || !ptr || !total_value_len_out || !element_count_out) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
 
-    // 初始化
-    *total_value_len_out = 0;
-    *element_count_out = 0;
+  // 初始化
+  *total_value_len_out = 0;
+  *element_count_out = 0;
 
-    // 开启游标启用
-    MDB_cursor *cursor;
-    int rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
-    if (rc != MDB_SUCCESS) {
-        mdb_cursor_close(cursor);
-        return rc;
-    }
+  // 开启游标启用
+  MDB_cursor *cursor;
+  int rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
+  if (rc != MDB_SUCCESS) {
+    mdb_cursor_close(cursor);
+    return rc;
+  }
 
-    // 开始遍历成员列表
-    MDB_val key = {.mv_data = (void*)ptr->data,.mv_size = 17};
-    MDB_val value;
-    rc = mdb_cursor_get(cursor, &key, &value, MDB_SET);
-    if (rc != MDB_SUCCESS) {
-        mdb_cursor_close(cursor);
-        return rc;
-    }
-    while (rc != MDB_NOTFOUND) {
-        *total_value_len_out += value.mv_size;
-        *element_count_out += 1;
-        rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT_DUP);
-    }
-    
+  // 开始遍历成员列表
+  MDB_val key = {.mv_data = (void *)ptr->data, .mv_size = 17};
+  MDB_val value;
+  rc = mdb_cursor_get(cursor, &key, &value, MDB_SET);
+  if (rc != MDB_SUCCESS) {
+    mdb_cursor_close(cursor);
+    return rc;
+  }
+  while (rc != MDB_NOTFOUND) {
+    *total_value_len_out += value.mv_size;
+    *element_count_out += 1;
+    rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT_DUP);
+  }
+
+  mdb_cursor_close(cursor);
+  return LMJCORE_SUCCESS;
+}
+
+int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                           const char *member_name, size_t member_name_len,
+                           uint8_t *value_buf, size_t value_buf_size,
+                           size_t value_buf_offset, size_t *value_size) {
+  if (!txn || !obj_ptr || !member_name || !value_size ||
+      obj_ptr->data[0] != LMJCORE_OBJ) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  // 确认对象存在
+  int rc = lmjcore_exist(txn, obj_ptr);
+  if (rc <= 0) {
+    return rc == 0 ? LMJCORE_ERROR_ENTITY_NOT_FOUND : rc;
+  }
+
+  // 成员名长度检查
+  if (member_name_len > MAX_MEMBER_LENGTH) {
+    return LMJCORE_ERROR_MEMBER_TOO_LONG;
+  }
+
+  // 初始化
+  *value_size = 0;
+
+  // 拼接完整的key
+  uint8_t *t_key = malloc(17 + member_name_len);
+  if (t_key == NULL) {
+    return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
+  }
+  memcpy(t_key, obj_ptr->data, 17);
+  memcpy(t_key + 17, member_name, member_name_len);
+
+  // 查询成员的值
+  MDB_val key = {.mv_data = t_key, .mv_size = 17 + member_name_len};
+  MDB_val value;
+  rc = mdb_get(txn->mdb_txn, txn->env->main_dbi, &key, &value);
+  free(t_key);
+  if (rc != MDB_SUCCESS) {
+    return rc; // 注意如果是缺值状态(arr库中存在mian库未找到)会返回MDB_NOTFOUND调用者注意检查以及处理
+  }
+
+  // 检查缓冲区是否足够
+  if (value_buf_offset + value.mv_size > value_buf_size) {
+    return LMJCORE_ERROR_BUFFER_TOO_SMALL;
+  }
+
+  // 将值复制到缓冲区
+  memcpy(value_buf + value_buf_offset, value.mv_data, value.mv_size);
+  *value_size = value.mv_size;
+
+  return LMJCORE_SUCCESS;
+}
+
+int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                    lmjcore_query_mode mode, uint8_t *result_buf,
+                    size_t result_buf_size, lmjcore_result **result_head) {
+  if (!txn || !obj_ptr || !result_buf || !result_head ||
+      obj_ptr->data[0] != LMJCORE_OBJ) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  // 初始化返回空间
+  memset(result_buf, 0, result_buf_size);
+
+  // 设置返回头在缓冲区起始位置
+  lmjcore_result *result = (lmjcore_result *)result_buf;
+  result->error_count = 0;
+  result->count = 0;
+  *result_head = result;
+
+  // 最小缓冲区检查
+  if (result_buf_size <
+      sizeof(lmjcore_result) + sizeof(lmjcore_obj_descriptor)) {
+    add_buffer_error(result, obj_ptr);
+    return LMJCORE_ERROR_BUFFER_TOO_SMALL;
+  }
+
+  // 对象存在性检查
+  int rc = lmjcore_exist(txn, obj_ptr);
+  if (rc < 0) {
+    add_lmdb_error(result, obj_ptr, rc);
+    return rc;
+  }
+  if (rc == 0) {
+    add_entity_not_found_error(result, obj_ptr);
+    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+  }
+
+  // 内存布局定义：
+  // +------------------------+ ← result_buf (result)
+  // | lmjcore_result         | 固定头部
+  // +------------------------+
+  // | member_descriptors[]   | 描述符从前向后增长
+  // +------------------------+
+  // | ...                    |
+  // +------------------------+
+  // | name & value data      | 数据从后向前增长
+  // +------------------------+ ← result_buf + result_buf_size
+
+  // 计算关键边界指针
+  uint8_t *descriptors_start = result_buf + sizeof(lmjcore_result);
+  uint8_t *data_end = result_buf + result_buf_size;
+
+  lmjcore_obj_descriptor *current_descriptor =
+      (lmjcore_obj_descriptor *)descriptors_start;
+  uint8_t *current_data = data_end; // 数据从末尾开始
+
+  // 开启游标读取成员列表
+  MDB_cursor *cursor;
+  rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
+  if (rc != MDB_SUCCESS) {
+    add_lmdb_error(result, obj_ptr, rc);
+    return rc;
+  }
+
+  MDB_val key = {.mv_data = (void *)obj_ptr->data, .mv_size = 17};
+  MDB_val member_name_val;
+
+  // 定位到该对象的成员列表开始位置
+  rc = mdb_cursor_get(cursor, &key, &member_name_val, MDB_SET);
+  if (rc == MDB_NOTFOUND) {
+    // 空对象 - 没有成员
     mdb_cursor_close(cursor);
     return LMJCORE_SUCCESS;
-}
+  }
+  if (rc != MDB_SUCCESS) {
+    add_lmdb_error(result, obj_ptr, rc);
+    mdb_cursor_close(cursor);
+    return rc;
+  }
 
-int lmjcore_obj_member_get(lmjcore_txn* txn,
-                    const lmjcore_ptr* obj_ptr,
-                    const char* member_name,size_t member_name_len,
-                    uint8_t* value_buf, size_t value_buf_size, size_t value_buf_offset,
-                    size_t* value_size){
-    if (!txn || !obj_ptr || !member_name || !value_size || obj_ptr->data[0]!=LMJCORE_OBJ) {
-        return LMJCORE_ERROR_INVALID_PARAM;
+  // 单次遍历处理所有成员
+  while (rc == MDB_SUCCESS) {
+    size_t member_name_len = member_name_val.mv_size;
+
+    // 检查描述符空间是否足够
+    uint8_t *next_descriptor = (uint8_t *)(current_descriptor + 1);
+    if (next_descriptor >= current_data) {
+      add_buffer_error(result, obj_ptr);
+      mdb_cursor_close(cursor);
+      return LMJCORE_ERROR_BUFFER_TOO_SMALL;
     }
 
-    // 确认对象存在
-    int rc = lmjcore_exist(txn, obj_ptr);
-    if (rc <= 0) {
-        return rc==0 ? LMJCORE_ERROR_ENTITY_NOT_FOUND : rc; 
+    // 构建完整key查询成员值
+    uint8_t *full_key = malloc(17 + member_name_len);
+    if (!full_key) {
+      add_error_to_result(result, LMJCORE_READERR_MEMORY_ALLOCATION_FAILED,
+                          obj_ptr, 0, 0,
+                          LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED);
+      mdb_cursor_close(cursor);
+      return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
     }
 
-    // 成员名长度检查
-    if (member_name_len > MAX_MEMBER_LENGTH) {
-        return LMJCORE_ERROR_MEMBER_TOO_LONG;
-    }
+    memcpy(full_key, obj_ptr->data, 17);
+    memcpy(full_key + 17, member_name_val.mv_data, member_name_len);
 
-    // 初始化
-    *value_size = 0;
+    MDB_val member_key = {.mv_data = full_key, .mv_size = 17 + member_name_len};
+    MDB_val member_value;
 
-    // 拼接完整的key
-    uint8_t* t_key = malloc(17+member_name_len);
-    if (t_key == NULL) {
-        return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
-    }
-    memcpy(t_key, obj_ptr->data, 17);
-    memcpy(t_key+17, member_name, member_name_len);
-   
-    // 查询成员的值
-    MDB_val key = {.mv_data = t_key,.mv_size = 17+member_name_len};
-    MDB_val value;
-    rc = mdb_get(txn->mdb_txn, txn->env->main_dbi, &key, &value);
-    free(t_key);
+    // 查询成员值
+    rc = mdb_get(txn->mdb_txn, txn->env->main_dbi, &member_key, &member_value);
+
     if (rc != MDB_SUCCESS) {
-        return rc; // 注意如果是缺值状态(arr库中存在mian库未找到)会返回MDB_NOTFOUND调用者注意检查以及处理
-    }
+      // 成员值缺失处理
+      current_descriptor->name_len = member_name_len;
+      current_descriptor->value_len = 0;
+      current_descriptor->value_offset = 0; // 表示null
 
-    // 检查缓冲区是否足够
-    if (value_buf_offset+value.mv_size > value_buf_size) {
-        return LMJCORE_ERROR_BUFFER_TOO_SMALL;
-    }
-
-    // 将值复制到缓冲区
-    memcpy(value_buf+value_buf_offset, value.mv_data, value.mv_size);
-    *value_size = value.mv_size;
-    
-    return LMJCORE_SUCCESS;
-}
-
-int lmjcore_obj_get(lmjcore_txn* txn, 
-                    const lmjcore_ptr* obj_ptr,
-                    lmjcore_query_mode mode,
-                    uint8_t* result_buf, 
-                    size_t result_buf_size,
-                    lmjcore_result** result_head) {
-    if (!txn || !obj_ptr || !result_buf || !result_head || obj_ptr->data[0] != LMJCORE_OBJ) {
-        return LMJCORE_ERROR_INVALID_PARAM;
-    }
-
-    // 初始化返回空间
-    memset(result_buf, 0, result_buf_size);
-
-    // 设置返回头在缓冲区起始位置
-    lmjcore_result* result = (lmjcore_result*)result_buf;
-    result->error_count = 0;
-    result->count = 0;
-    *result_head = result;
-
-    // 最小缓冲区检查
-    if (result_buf_size < sizeof(lmjcore_result) + sizeof(lmjcore_member_descriptor)) {
+      // 尝试存储成员名称（如果空间足够）
+      if (current_data - member_name_len >= next_descriptor) {
+        current_data -= member_name_len;
+        memcpy(current_data, member_name_val.mv_data, member_name_len);
+        current_descriptor->name_offset = current_data - result_buf;
+      } else {
+        // 名称空间不足
+        current_descriptor->name_offset = 0;
         add_buffer_error(result, obj_ptr);
         return LMJCORE_ERROR_BUFFER_TOO_SMALL;
-    }
+      }
 
-    // 对象存在性检查
-    int rc = lmjcore_exist(txn, obj_ptr);
-    if (rc < 0) {
-        add_lmdb_error(result, obj_ptr, rc);
-        return rc;
-    }
-    if (rc == 0) {
-        add_entity_not_found_error(result, obj_ptr);
-        return LMJCORE_ERROR_ENTITY_NOT_FOUND;
-    }
+      add_member_missing_error(result, obj_ptr, current_descriptor->name_offset,
+                               current_descriptor->name_len);
 
-    // 内存布局定义：
-    // +------------------------+ ← result_buf (result)
-    // | lmjcore_result         | 固定头部
-    // +------------------------+
-    // | member_descriptors[]   | 描述符从前向后增长
-    // +------------------------+
-    // | ...                    |
-    // +------------------------+
-    // | name & value data      | 数据从后向前增长  
-    // +------------------------+ ← result_buf + result_buf_size
-
-    // 计算关键边界指针
-    uint8_t* descriptors_start = result_buf + sizeof(lmjcore_result);
-    uint8_t* data_end = result_buf + result_buf_size;
-    
-    lmjcore_member_descriptor* current_descriptor = (lmjcore_member_descriptor*)descriptors_start;
-    uint8_t* current_data = data_end;  // 数据从末尾开始
-
-    // 开启游标读取成员列表
-    MDB_cursor *cursor;
-    rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
-    if (rc != MDB_SUCCESS) {
-        add_lmdb_error(result, obj_ptr, rc);
-        return rc;
-    }
-
-    MDB_val key = {.mv_data = (void*)obj_ptr->data, .mv_size = 17};
-    MDB_val member_name_val;
-    
-    // 定位到该对象的成员列表开始位置
-    rc = mdb_cursor_get(cursor, &key, &member_name_val, MDB_SET);
-    if (rc == MDB_NOTFOUND) {
-        // 空对象 - 没有成员
-        mdb_cursor_close(cursor);
-        return LMJCORE_SUCCESS;
-    }
-    if (rc != MDB_SUCCESS) {
-        add_lmdb_error(result, obj_ptr, rc);
-        mdb_cursor_close(cursor);
-        return rc;
-    }
-
-    // 单次遍历处理所有成员
-    while (rc == MDB_SUCCESS) {
-        size_t member_name_len = member_name_val.mv_size;
-        
-        // 检查描述符空间是否足够
-        uint8_t* next_descriptor = (uint8_t*)(current_descriptor + 1);
-        if (next_descriptor >= current_data) {
-            add_buffer_error(result, obj_ptr);
-            mdb_cursor_close(cursor);
-            return LMJCORE_ERROR_BUFFER_TOO_SMALL;
-        }
-
-        // 构建完整key查询成员值
-        uint8_t* full_key = malloc(17 + member_name_len);
-        if (!full_key) {
-            add_error_to_result(result, LMJCORE_READERR_MEMORY_ALLOCATION_FAILED, 
-                              obj_ptr, 0, 0, LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED);
-            mdb_cursor_close(cursor);
-            return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
-        }
-        
-        memcpy(full_key, obj_ptr->data, 17);
-        memcpy(full_key + 17, member_name_val.mv_data, member_name_len);
-        
-        MDB_val member_key = {.mv_data = full_key, .mv_size = 17 + member_name_len};
-        MDB_val member_value;
-
-        // 查询成员值
-        rc = mdb_get(txn->mdb_txn, txn->env->main_dbi, &member_key, &member_value);
-        
-        if (rc != MDB_SUCCESS) {
-            // 成员值缺失处理
-            current_descriptor->name_len = member_name_len;
-            current_descriptor->value_len = 0;
-            current_descriptor->value_offset = 0; // 表示null
-            
-            // 尝试存储成员名称（如果空间足够）
-            if (current_data - member_name_len >= next_descriptor) {
-                current_data -= member_name_len;
-                memcpy(current_data, member_name_val.mv_data, member_name_len);
-                current_descriptor->name_offset = current_data - result_buf;
-            } else {
-                // 名称空间不足
-                current_descriptor->name_offset = 0;
-                add_buffer_error(result, obj_ptr);
-                return LMJCORE_ERROR_BUFFER_TOO_SMALL;
-            }
-            
-            add_member_missing_error(result, obj_ptr, 
-                                   current_descriptor->name_offset, 
-                                   current_descriptor->name_len);
-            
-            if (mode == LMJCORE_MODE_STRICT) {
-                free(full_key);
-                mdb_cursor_close(cursor);
-                return LMJCORE_ERROR_STRICT_MODE_VIOLATION;
-            }
-        } else {
-            // 成功获取成员值
-            size_t total_needed = member_name_len + member_value.mv_size;
-            
-            // 检查数据空间是否足够
-            if (current_data - total_needed < next_descriptor) {
-                free(full_key);
-                add_buffer_error(result, obj_ptr);
-                mdb_cursor_close(cursor);
-                return LMJCORE_ERROR_BUFFER_TOO_SMALL;
-            }
-            
-            // 存储名称和值
-            current_data -= member_value.mv_size;
-            memcpy(current_data, member_value.mv_data, member_value.mv_size);
-            current_descriptor->value_offset = current_data - result_buf;
-            current_descriptor->value_len = member_value.mv_size;
-            
-            current_data -= member_name_len;
-            memcpy(current_data, member_name_val.mv_data, member_name_len);
-            current_descriptor->name_offset = current_data - result_buf;
-            current_descriptor->name_len = member_name_len;
-        }
-        
+      if (mode == LMJCORE_MODE_STRICT) {
         free(full_key);
-        
-        // 移动到下一个描述符位置
-        current_descriptor++;
-        result->count++;
-        
-        // 获取下一个成员名称
-        rc = mdb_cursor_get(cursor, &key, &member_name_val, MDB_NEXT_DUP);
+        mdb_cursor_close(cursor);
+        return LMJCORE_ERROR_STRICT_MODE_VIOLATION;
+      }
+    } else {
+      // 成功获取成员值
+      size_t total_needed = member_name_len + member_value.mv_size;
+
+      // 检查数据空间是否足够
+      if (current_data - total_needed < next_descriptor) {
+        free(full_key);
+        add_buffer_error(result, obj_ptr);
+        mdb_cursor_close(cursor);
+        return LMJCORE_ERROR_BUFFER_TOO_SMALL;
+      }
+
+      // 存储名称和值
+      current_data -= member_value.mv_size;
+      memcpy(current_data, member_value.mv_data, member_value.mv_size);
+      current_descriptor->value_offset = current_data - result_buf;
+      current_descriptor->value_len = member_value.mv_size;
+
+      current_data -= member_name_len;
+      memcpy(current_data, member_name_val.mv_data, member_name_len);
+      current_descriptor->name_offset = current_data - result_buf;
+      current_descriptor->name_len = member_name_len;
     }
 
-    mdb_cursor_close(cursor);
+    free(full_key);
 
-    // 设置最终的成员描述符指针
-    result->descriptor.members = (lmjcore_member_descriptor*)descriptors_start;
-    
-    return LMJCORE_SUCCESS;
+    // 移动到下一个描述符位置
+    current_descriptor++;
+    result->count++;
+
+    // 获取下一个成员名称
+    rc = mdb_cursor_get(cursor, &key, &member_name_val, MDB_NEXT_DUP);
+  }
+
+  mdb_cursor_close(cursor);
+
+  // 设置最终的成员描述符指针
+  result->descriptor.object_descriptors =
+      (lmjcore_obj_descriptor *)descriptors_start;
+
+  return LMJCORE_SUCCESS;
 }
-
 
 /**
  * @brief 获取数组的所有元素
- * 
+ *
  * 从指定数组指针读取所有元素，支持宽松和严格模式。
  * - 严格模式：若数组不存在则立即返回错误。
  * - 宽松模式：若数组不存在或为空，返回空数组结构并记录错误。
- * 
+ *
  * 结果写入调用方提供的 result_buf 缓冲区，采用紧凑布局：
  *  [ lmjcore_result头部 | value_descriptor数组 | 元素数据（从后向前） ]
- * 
+ *
  * @param txn 有效事务句柄
  * @param arr_ptr 数组指针
  * @param mode 查询模式（宽松/严格）
@@ -884,228 +959,309 @@ int lmjcore_obj_get(lmjcore_txn* txn,
  * @param result_head 输出：指向 result_buf 中 lmjcore_result 结构的指针
  * @return 错误码（LMJCORE_SUCCESS 表示成功，即使有语义错误也视为成功）
  */
-int lmjcore_arr_get(lmjcore_txn* txn, const lmjcore_ptr* arr_ptr,
-                    lmjcore_query_mode mode,
-                    uint8_t* result_buf, size_t result_buf_size,
-                    lmjcore_result** result_head) {
-    if (!txn || !arr_ptr || !result_buf || !result_head || result_buf_size < sizeof(lmjcore_result)) {
-        return LMJCORE_ERROR_INVALID_PARAM;
+int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
+                    lmjcore_query_mode mode, uint8_t *result_buf,
+                    size_t result_buf_size, lmjcore_result **result_head) {
+  if (!txn || !arr_ptr || !result_buf || !result_head ||
+      result_buf_size < sizeof(lmjcore_result)) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  // 初始化结果结构
+  lmjcore_result *result = (lmjcore_result *)result_buf;
+  memset(result, 0, sizeof(lmjcore_result));
+  *result_head = result;
+
+  // 检查数组是否存在（通过 arr 数据库）
+  MDB_val key = {.mv_size = 17, .mv_data = (void *)arr_ptr->data};
+  MDB_val data;
+  int rc = mdb_get(txn->mdb_txn, txn->env->arr_dbi, &key, &data);
+
+  if (rc == MDB_NOTFOUND) {
+    // 数组不存在
+    if (mode == LMJCORE_MODE_STRICT) {
+      add_entity_not_found_error(result, arr_ptr);
+      return LMJCORE_SUCCESS;
+    } else {
+      // 宽松模式：返回空数组
+      result->count = 0;
+      result->descriptor.array_descriptors = NULL;
+      add_entity_not_found_error(result, arr_ptr);
+      return LMJCORE_SUCCESS;
     }
+  } else if (rc != MDB_SUCCESS) {
+    add_lmdb_error(result, arr_ptr, rc);
+    return LMJCORE_SUCCESS;
+  }
 
-    // 初始化结果结构
-    lmjcore_result* result = (lmjcore_result*)result_buf;
-    memset(result, 0, sizeof(lmjcore_result));
-    *result_head = result;
+  // 数组存在，开始遍历其元素
+  MDB_cursor *cursor;
+  rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
+  if (rc != MDB_SUCCESS) {
+    add_lmdb_error(result, arr_ptr, rc);
+    return LMJCORE_SUCCESS;
+  }
 
-    // 检查数组是否存在（通过 arr 数据库）
-    MDB_val key = { .mv_size = 17, .mv_data = (void*)arr_ptr->data };
-    MDB_val data;
-    int rc = mdb_get(txn->mdb_txn, txn->env->arr_dbi, &key, &data);
-
-    if (rc == MDB_NOTFOUND) {
-        // 数组不存在
-        if (mode == LMJCORE_MODE_STRICT) {
-            add_entity_not_found_error(result, arr_ptr);
-            return LMJCORE_SUCCESS;
-        } else {
-            // 宽松模式：返回空数组
-            result->count = 0;
-            result->descriptor.value = NULL;
-            add_entity_not_found_error(result, arr_ptr);
-            return LMJCORE_SUCCESS;
-        }
-    } else if (rc != MDB_SUCCESS) {
-        add_lmdb_error(result, arr_ptr, rc);
-        return LMJCORE_SUCCESS;
-    }
-
-    // 数组存在，开始遍历其元素
-    MDB_cursor* cursor;
-    rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
-    if (rc != MDB_SUCCESS) {
-        add_lmdb_error(result, arr_ptr, rc);
-        return LMJCORE_SUCCESS;
-    }
-
-    // 定位到数组的第一个元素
-    rc = mdb_cursor_get(cursor, &key, &data, MDB_SET);
-    if (rc != MDB_SUCCESS) {
-        mdb_cursor_close(cursor);
-        add_lmdb_error(result, arr_ptr, rc);
-        return LMJCORE_SUCCESS;
-    }
-
-    // 预计算所需空间
-    size_t total_data_size = 0;
-    size_t element_count = 0;
-    MDB_val tmp_key = key, tmp_val = data;
-
-    do {
-        total_data_size += tmp_val.mv_size;
-        element_count++;
-        rc = mdb_cursor_get(cursor, &tmp_key, &tmp_val, MDB_NEXT_DUP);
-    } while (rc == MDB_SUCCESS && memcmp(tmp_key.mv_data, arr_ptr->data, 17) == 0);
-
-    // 重置游标到起始位置
-    mdb_cursor_get(cursor, &key, &data, MDB_SET);
-
-    // 计算所需总空间
-    size_t descriptors_size = element_count * sizeof(lmjcore_value_descriptor);
-    size_t available_data_space = result_buf_size - sizeof(lmjcore_result) - descriptors_size;
-
-    if (total_data_size > available_data_space) {
-        mdb_cursor_close(cursor);
-        add_buffer_error(result, arr_ptr);
-        return LMJCORE_SUCCESS;
-    }
-
-    // 填充结果结构
-    result->count = element_count;
-    result->descriptor.value = (lmjcore_value_descriptor*)(result_buf + sizeof(lmjcore_result));
-
-    // 数据存储从缓冲区末尾向前写入
-    uint8_t* data_write_ptr = result_buf + result_buf_size;
-    MDB_cursor* read_cursor;
-    mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &read_cursor);
-    mdb_cursor_get(read_cursor, &key, &data, MDB_SET);
-
-    for (size_t i = 0; i < element_count; i++) {
-        data_write_ptr -= data.mv_size;
-        memcpy(data_write_ptr, data.mv_data, data.mv_size);
-
-        result->descriptor.value[i].value_offset = data_write_ptr - result_buf;
-        result->descriptor.value[i].value_len = data.mv_size;
-
-        if (i < element_count - 1) {
-            mdb_cursor_get(read_cursor, &key, &data, MDB_NEXT_DUP);
-        }
-    }
-
-    mdb_cursor_close(read_cursor);
+  // 定位到数组的第一个元素
+  rc = mdb_cursor_get(cursor, &key, &data, MDB_SET);
+  if (rc != MDB_SUCCESS) {
     mdb_cursor_close(cursor);
-
+    add_lmdb_error(result, arr_ptr, rc);
     return LMJCORE_SUCCESS;
+  }
+
+  // 预计算所需空间
+  size_t total_data_size = 0;
+  size_t element_count = 0;
+  MDB_val tmp_key = key, tmp_val = data;
+
+  do {
+    total_data_size += tmp_val.mv_size;
+    element_count++;
+    rc = mdb_cursor_get(cursor, &tmp_key, &tmp_val, MDB_NEXT_DUP);
+  } while (rc == MDB_SUCCESS &&
+           memcmp(tmp_key.mv_data, arr_ptr->data, 17) == 0);
+
+  // 重置游标到起始位置
+  mdb_cursor_get(cursor, &key, &data, MDB_SET);
+
+  // 计算所需总空间
+  size_t descriptors_size = element_count * sizeof(lmjcore_arr_descriptor);
+  size_t available_data_space =
+      result_buf_size - sizeof(lmjcore_result) - descriptors_size;
+
+  if (total_data_size > available_data_space) {
+    mdb_cursor_close(cursor);
+    add_buffer_error(result, arr_ptr);
+    return LMJCORE_SUCCESS;
+  }
+
+  // 填充结果结构
+  result->count = element_count;
+  result->descriptor.array_descriptors =
+      (lmjcore_arr_descriptor *)(result_buf + sizeof(lmjcore_result));
+
+  // 数据存储从缓冲区末尾向前写入
+  uint8_t *data_write_ptr = result_buf + result_buf_size;
+  MDB_cursor *read_cursor;
+  mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &read_cursor);
+  mdb_cursor_get(read_cursor, &key, &data, MDB_SET);
+
+  for (size_t i = 0; i < element_count; i++) {
+    data_write_ptr -= data.mv_size;
+    memcpy(data_write_ptr, data.mv_data, data.mv_size);
+
+    result->descriptor.array_descriptors[i].value_offset =
+        data_write_ptr - result_buf;
+    result->descriptor.array_descriptors[i].value_len = data.mv_size;
+
+    if (i < element_count - 1) {
+      mdb_cursor_get(read_cursor, &key, &data, MDB_NEXT_DUP);
+    }
+  }
+
+  mdb_cursor_close(read_cursor);
+  mdb_cursor_close(cursor);
+
+  return LMJCORE_SUCCESS;
 }
 
-int lmjcore_audit_object(lmjcore_txn* txn, const lmjcore_ptr* obj_ptr,
-                         uint8_t* report_buf, size_t report_buf_size,
-                         lmjcore_audit_report** report_head) {
-    if (!txn || !obj_ptr || !report_buf || !report_head || obj_ptr->data[0] != LMJCORE_OBJ) {
-        return LMJCORE_ERROR_INVALID_PARAM;
+int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                         uint8_t *report_buf, size_t report_buf_size,
+                         lmjcore_audit_report **report_head) {
+  if (!txn || !obj_ptr || !report_buf || !report_head ||
+      obj_ptr->data[0] != LMJCORE_OBJ) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  /*
+  report_buf内存结构
+  ---------------------  <-- report_buf(report_head)
+  |report_head         |
+  ---------------------
+  |report_descriptor   | <-- 前往后
+  ----------------------
+  |....                |
+  ----------------------
+  | member_name        | <-- 由后往前
+  ---------------------- <-- data_offset(report_buf_size)
+  */
+
+  // 缓冲区最小值检查
+  if (report_buf_size < sizeof(lmjcore_audit_report))
+    return LMJCORE_ERROR_BUFFER_TOO_SMALL;
+
+  // 初始化报告头
+  lmjcore_audit_report *report = (lmjcore_audit_report *)report_buf;
+  report->audit_cont = 0;
+  report->audit_descriptor = NULL;
+  *report_head = report;
+  size_t report_descriptor_offset = sizeof(lmjcore_audit_report);
+
+  // 设置描述列表
+  report->audit_descriptor =
+      (lmjcore_audit_descriptor *)(report_buf + sizeof(lmjcore_audit_report));
+
+  // 初始化数据区域偏移量
+  size_t data_offset = report_buf_size;
+
+  // 遍历成员列表
+  MDB_cursor *cursor;
+  int rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
+  if (rc != MDB_SUCCESS) {
+    return rc;
+  }
+
+  MDB_val key = {.mv_data = (void *)obj_ptr->data, .mv_size = 17};
+  MDB_val value;
+
+  // 使用函数统计成员的数量以及大小
+  size_t member_size, member_count;
+  rc = lmjcore_arr_stat_element(txn, obj_ptr, &member_size, &member_count);
+  if (rc != LMJCORE_SUCCESS) {
+    mdb_cursor_close(cursor);
+    return rc;
+  }
+
+  rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT_DUP);
+  if (rc != MDB_SUCCESS) {
+    mdb_cursor_close(cursor);
+    return rc;
+  }
+
+  // 存储成员列表
+  MDB_val *arr_value[member_count];
+  memset(arr_value, 0, sizeof(arr_value));
+  size_t arr_value_count = 0;
+  while (rc != MDB_NOTFOUND && arr_value_count <= member_count) {
+    // 申请内存用于临时存储成员名
+    uint8_t *tmp = malloc(value.mv_size);
+    if (!tmp) {
+      mdb_cursor_close(cursor);
+      return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
     }
-    /* 
-    report_buf内存结构
-    ---------------------  <-- report_buf(report_head)
-    |report_head         | <-- 前往后
-    ---------------------
-    |....                |
-    ----------------------
-    | member_name        | <-- 由后往前
-    ---------------------- <-- data_offtset(report_buf_size)
-    */
-
-    // 初始化报告头
-    lmjcore_audit_report *report = (lmjcore_audit_report*)report_buf;
-    report->audit_cont = 0;
-    report->audit_descriptor = NULL;
-    *report_head = report;
-    size_t report_offset = 0;
-
-    // 初始化数据区域偏移量
-    size_t data_offtset = report_buf_size;
-
-    // 遍历成员列表
-    MDB_cursor *cursor;
-    int rc = mdb_cursor_open(txn->mdb_txn, txn->env->arr_dbi, &cursor);
-    if (rc != MDB_SUCCESS) {
-        return rc;
+    memcpy(tmp, value.mv_data, value.mv_size);
+    arr_value[arr_value_count] =
+        malloc(sizeof(MDB_val)); // 必须分配 MDB_val 结构体
+    if (!arr_value[arr_value_count]) {
+      free_mdb_val_array(arr_value, arr_value_count);
+      mdb_cursor_close(cursor);
+      return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
     }
-
-    MDB_val key = {.mv_data = (void*)obj_ptr->data,.mv_size = 17};
-    MDB_val value;
-
-    // 使用函数统计成员的数量以及大小
-    size_t member_size,member_count;
-    rc = lmjcore_arr_stat_element(txn, obj_ptr, 
-        &member_size, &member_count);
-    if (rc != LMJCORE_SUCCESS) {
-        mdb_cursor_close(cursor);
-        return rc;
-    }
-
+    // 将成员保持到数组中
+    arr_value[arr_value_count]->mv_data = tmp;
+    arr_value[arr_value_count]->mv_size = value.mv_size;
+    arr_value_count++;
     rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT_DUP);
-    if (rc != MDB_SUCCESS) {
-        mdb_cursor_close(cursor);
-        return rc;
+  }
+  mdb_cursor_close(cursor);
+
+  // 获取成员值(在mian库遍历同一指针的对象)
+  // 构建一个锚点key(快速定位避免扫描全表)
+  memcpy(key.mv_data, obj_ptr->data, 17);
+  memcpy(key.mv_data + 17, arr_value[0]->mv_data, arr_value[0]->mv_size);
+
+  rc = mdb_cursor_open(txn->mdb_txn, txn->env->main_dbi, &cursor);
+  if (rc != MDB_SUCCESS) {
+    free_mdb_val_array(arr_value, arr_value_count);
+    return rc;
+  }
+
+  rc = mdb_cursor_get(cursor, &key, &value, MDB_SET);
+  if (rc != MDB_SUCCESS) {
+    mdb_cursor_close(cursor);
+    free_mdb_val_array(arr_value, arr_value_count);
+    return rc;
+  }
+  if (rc == MDB_NOTFOUND) {
+    int r = add_audit(report, report_buf, LMJCORE_AUDITERR_MISSING_VALUE,
+                     arr_value[0], obj_ptr, &data_offset,
+                     &report_descriptor_offset);
+    if (r != LMJCORE_SUCCESS) {
+      mdb_cursor_close(cursor);
+      free_mdb_val_array(arr_value, arr_value_count);
+      return r;
     }
-
-    // 存储成员列表
-    MDB_val* value_arr[member_count];
-    size_t value_count = 0;
-   while (rc != MDB_NOTFOUND && value_count <= member_count) {
-        // 申请内存用于临时存储成员名
-        uint8_t *tmp = malloc(value.mv_size);
-        if (tmp) {
-            mdb_cursor_close(cursor);
-            return LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
-        }
-        memcpy(tmp, value.mv_data, value.mv_size);
-        // 将成员保持到数组中
-        value_arr[value_count]->mv_data = tmp;
-        value_arr[value_count]->mv_size = value.mv_size;
-        value_count++;
-        rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT_DUP);
-   }
-   mdb_cursor_close(cursor);
-
-   // 获取成员值(在mian库遍历同一指针的对象)
-   // 构建一个锚点key(快速定位避免扫描全表)
-   memcpy(key.mv_data, obj_ptr->data, 17);
-   memcpy(key.mv_data+17, value_arr[0]->mv_data, value_arr[0]->mv_size);
-   
-   rc = mdb_cursor_open(txn->mdb_txn, txn->env->main_dbi, &cursor);
-   if (rc != MDB_SUCCESS) {
-        free_arr_memry((void**)value_arr, value_count);
-        return rc;
-   }
-
-   rc = mdb_cursor_get(cursor, &key, &value, MDB_SET);
-   if (rc != MDB_SUCCESS) {
+    for (size_t i = 1; i <= arr_value_count && rc == MDB_NOTFOUND; i++) {
+      memcpy(key.mv_data + 17, arr_value[i]->mv_data, arr_value[i]->mv_size);
+      rc = mdb_cursor_get(cursor, &key, &value, MDB_SET);
+      r = add_audit(report, report_buf, LMJCORE_AUDITERR_MISSING_VALUE,
+                   arr_value[i], obj_ptr, &data_offset,
+                   &report_descriptor_offset);
+      if (r != LMJCORE_SUCCESS) {
         mdb_cursor_close(cursor);
-        free_arr_memry((void**)value_arr, value_count);
-        return rc;
-   }
-   if (rc == MDB_NOTFOUND) {
-        int r = add_auit(report, report_buf, 
-            LMJCORE_AUDITERR_MISSING_VALUE, value_arr[0],
-            obj_ptr, &data_offtset, &report_offset);
-        if (r != LMJCORE_SUCCESS) {
+        free_mdb_val_array(arr_value, arr_value_count);
+        return r;
+      }
+    }
+    if (rc == MDB_NOTFOUND) {
+      // 没找到可用成员(全是缺失值)
+      // 使用MDB_SET_RANGE
+      key.mv_data = (void *)obj_ptr->data;
+      key.mv_size = 17;
+      rc = mdb_cursor_get(cursor, &key, &value, MDB_SET_RANGE);
+      if (rc == MDB_NOTFOUND) {
+        report->audit_descriptor = NULL;
+        free_mdb_val_array(arr_value, arr_value_count);
+        mdb_cursor_close(cursor);
+        return LMJCORE_SUCCESS;
+      }
+      while (rc == MDB_SUCCESS) {
+        if (OBJ_KEY_PREFIX(obj_ptr, key)) {
+          r = add_audit(report, report_buf, report_buf_size, &key, obj_ptr,
+                       &data_offset, &report_descriptor_offset);
+          if (r != LMJCORE_SUCCESS) {
+            free_mdb_val_array(arr_value, arr_value_count);
             mdb_cursor_close(cursor);
-            free_arr_memry((void**)value_arr, value_count);
             return r;
+          }
         }
-        for (int i = 1; i <= value_count && rc == MDB_NOTFOUND; i++) {
-            memcpy(key.mv_data+17, value_arr[i]->mv_data, value_arr[i]->mv_size);
-            rc = mdb_cursor_get(cursor, &key, &value, MDB_SET);
-            r = add_auit(report, report_buf, LMJCORE_AUDITERR_MISSING_VALUE, 
-                value_arr[i], obj_ptr, &data_offtset, &report_offset);
-            if (r != LMJCORE_SUCCESS) {
-                mdb_cursor_close(cursor);
-                free_arr_memry((void**)value_arr, value_count);
-                return r;
-            }
-        }
-        if (rc == MDB_NOTFOUND) {
-            // 没找到可用成员(全是缺失值)
-            // 退回全表扫描
-        }
-   }
+        rc = mdb_cursor_get(cursor, &key, &value, MDB_SET_RANGE);
+      }
+      mdb_cursor_close(cursor);
+      free_mdb_val_array(arr_value, arr_value_count);
+      return LMJCORE_SUCCESS;
+    }
+  }
 
-    return LMJCORE_SUCCESS;
+  // 定位完成
+  // 向后扫描
+  rc = audit_obj_scanner(cursor, key, value, MDB_NEXT, arr_value,
+                         arr_value_count, obj_ptr, report_buf,
+                         report_descriptor_offset, data_offset, report);
+  if (rc != LMJCORE_SUCCESS) {
+    return rc;
+  }
+
+  // 向前扫描（更小的key）
+  rc = audit_obj_scanner(cursor, key, value, MDB_PREV, arr_value,
+                         arr_value_count, obj_ptr, report_buf,
+                         report_descriptor_offset, data_offset, report);
+  if (rc != LMJCORE_SUCCESS) {
+    return rc;
+  }
+
+  // 检查arr_value列表(成员名)是否已空(null)否标记为缺失成员
+  for (size_t i = 0; i < arr_value_count; i++) {
+    if (arr_value[i]) {
+      int r = add_audit(report, report_buf, LMJCORE_AUDITERR_MISSING_VALUE,
+                       arr_value[i], obj_ptr, &data_offset,
+                       &report_descriptor_offset);
+      if (r != LMJCORE_SUCCESS) {
+        mdb_cursor_close(cursor);
+        free_mdb_val_array(arr_value, arr_value_count);
+        return r;
+      }
+    }
+  }
+
+  mdb_cursor_close(cursor);
+  free_mdb_val_array(arr_value, arr_value_count);
+  return LMJCORE_SUCCESS;
 }
 
-int lmjcore_repair_object(lmjcore_txn* txn, const lmjcore_ptr* obj_ptr,
-                          const uint8_t* member_name, size_t member_name_len) {
-    // 简化实现 - 实际需要安全删除幽灵成员
-    return LMJCORE_SUCCESS;
+int lmjcore_repair_object(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                          const uint8_t *member_name, size_t member_name_len) {
+  // 简化实现 - 实际需要安全删除幽灵成员
+  return LMJCORE_SUCCESS;
 }

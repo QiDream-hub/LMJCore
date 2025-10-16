@@ -128,7 +128,7 @@ typedef struct {
 typedef struct {
   lmjcore_ptr ptr;
   uint8_t member_offset; // 成员名偏移量
-  uint8_t member_len;
+  uint16_t member_len;
   lmjcore_audit_error_code error;
 } lmjcore_audit_descriptor;
 

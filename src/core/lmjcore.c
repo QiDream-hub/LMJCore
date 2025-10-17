@@ -237,9 +237,8 @@ static int add_audit(lmjcore_audit_report *report, uint8_t *buf,
       &report->audit_descriptor[report->audit_cont];
   desc->error = error;
   desc->ptr = *obj_ptr;
-  desc->member_offset =
-      (uint8_t)*data_offset; // 注意：成员名偏移量为 uint8_t，最大255字节！
-  desc->member_len = (uint16_t)needed; // 同样受限于 uint8_t
+  desc->member_offset = *data_offset;
+  desc->member_len = (uint16_t)needed;
 
   report->audit_cont++;
   *report_descriptor_offset += desc_size;
@@ -649,10 +648,10 @@ int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
       // 已经移动到下一个对象，结束遍历
       break;
     }
-    
+
     *total_value_count_out += 1;
     *total_value_len_out += value.mv_size;
-    
+
     // 移动到下一个key
     rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT);
   } while (rc == MDB_SUCCESS);
@@ -666,13 +665,13 @@ cleanup:
   if (cursor) {
     mdb_cursor_close(cursor);
   }
-  
+
   // 如果出现错误，重置统计结果
   if (rc != LMJCORE_SUCCESS) {
     *total_value_count_out = 0;
     *total_value_len_out = 0;
   }
-  
+
   return rc;
 }
 
@@ -1197,8 +1196,55 @@ cleanup:
   return rc;
 }
 
-int lmjcore_repair_object(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                          const uint8_t *member_name, size_t member_name_len) {
-  // 简化实现 - 实际需要安全删除幽灵成员
-  return LMJCORE_SUCCESS;
+int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
+                          size_t report_buf_size,
+                          lmjcore_audit_report *report) {
+  if (!txn || !report || !report_buf) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  // 没有错误
+  if (report->audit_descriptor == NULL || report->audit_cont == 0) {
+    return LMJCORE_SUCCESS;
+  }
+
+  int final_result = LMJCORE_SUCCESS;
+
+  // 遍历整个错误列表
+  for (size_t i = 0; i < report->audit_cont; i++) {
+    lmjcore_audit_descriptor *desc = &report->audit_descriptor[i];
+
+    if (desc->error == LMJCORE_AUDITERR_GHOST_MEMBER) {
+      // 验证成员名偏移和长度
+      if (desc->member_offset + desc->member_len > report_buf_size) {
+        final_result = LMJCORE_ERROR_INVALID_PARAM;
+        break;
+      }
+
+      // 构建幽灵成员的完整key: <17字节指针> + <成员名>
+      size_t key_len = 17 + desc->member_len;
+      uint8_t *ghost_key = malloc(key_len);
+      if (!ghost_key) {
+        final_result = LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;
+        break;
+      }
+
+      memcpy(ghost_key, desc->ptr.data, 17);
+      memcpy(ghost_key + 17, report_buf + desc->member_offset,
+             desc->member_len);
+
+      MDB_val key = {.mv_data = ghost_key, .mv_size = key_len};
+      MDB_val value;
+
+      int error = mdb_del(txn->mdb_txn, txn->env->main_dbi, &key, &value);
+      free(ghost_key);
+
+      if (error != MDB_SUCCESS) {
+        final_result = error;
+        break; // 遇到第一个错误就停止，保持事务一致性
+      }
+    }
+  }
+
+  return final_result;
 }

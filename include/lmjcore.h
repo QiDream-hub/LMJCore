@@ -127,7 +127,7 @@ typedef struct {
 
 typedef struct {
   lmjcore_ptr ptr;
-  uint8_t member_offset; // 成员名偏移量
+  size_t member_offset; // 成员名偏移量
   uint16_t member_len;
   lmjcore_audit_error_code error;
 } lmjcore_audit_descriptor;
@@ -195,8 +195,8 @@ int lmjcore_exist(lmjcore_txn *txn, const lmjcore_ptr *ptr);
 int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
                          uint8_t *report_buf, size_t report_buf_size,
                          lmjcore_audit_report **report_head);
-int lmjcore_repair_object(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                          const uint8_t *member_name, size_t member_name_len);
+int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
+                          size_t report_buf_size, lmjcore_audit_report *report);
 
 #ifdef __cplusplus
 }

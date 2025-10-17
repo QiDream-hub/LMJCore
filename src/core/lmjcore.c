@@ -608,82 +608,74 @@ int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
  * @brief 统计对象成员的数据大小（从指定锚点成员开始双向扫描）
  * @param txn 事务句柄
  * @param obj_ptr 对象指针
- * @param anchor_member 锚点成员名称（必须存在）
- * @param anchor_member_len 锚点成员名称长度
  * @param total_value_len_out 返回所有成员值的总字节数
  * @param total_value_count_out 返回所有成员值的数量
  * @return 错误码
  */
 int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                            const uint8_t *anchor_member,
-                            size_t anchor_member_len,
                             size_t *total_value_len_out,
                             size_t *total_value_count_out) {
-  if (!txn || !obj_ptr || !anchor_member || !total_value_len_out ||
-      anchor_member_len > MAX_MEMBER_LENGTH)
+  if (!txn || !obj_ptr || !total_value_len_out || !total_value_count_out)
     return LMJCORE_ERROR_INVALID_PARAM;
 
   *total_value_len_out = 0;
   *total_value_count_out = 0;
 
-  // 构建起始key
-  uint8_t start_key[17 + MAX_MEMBER_LENGTH];
-  memcpy(start_key, obj_ptr->data, 17);
-  memcpy(start_key + 17, anchor_member, anchor_member_len);
-  size_t start_key_len = 17 + anchor_member_len;
-
-  MDB_val key = {.mv_size = start_key_len, .mv_data = start_key};
-  MDB_val val;
   MDB_cursor *cursor = NULL;
-
   int rc = mdb_cursor_open(txn->mdb_txn, txn->env->main_dbi, &cursor);
-  if (rc != MDB_SUCCESS)
+  if (rc != MDB_SUCCESS) {
     return rc;
+  }
 
-  /* 1. 精确匹配：锚点必须存在 */
-  rc = mdb_cursor_get(cursor, &key, &val, MDB_SET);
+  // 构建搜索key - 对象指针
+  MDB_val key = {.mv_data = (void *)obj_ptr->data, .mv_size = 17};
+  MDB_val value;
+
+  // 使用MDB_SET_RANGE定位到该对象的第一个成员
+  rc = mdb_cursor_get(cursor, &key, &value, MDB_SET_RANGE);
   if (rc == MDB_NOTFOUND) {
-    mdb_cursor_close(cursor);
-    return LMJCORE_ERROR_INVALID_PARAM;
+    // 对象没有成员，这是正常情况
+    rc = LMJCORE_SUCCESS;
+    goto cleanup;
   }
   if (rc != MDB_SUCCESS) {
-    mdb_cursor_close(cursor);
-    return rc;
+    goto cleanup;
   }
 
-  // 统计锚点成员的值大小
-  *total_value_len_out += val.mv_size;
-  *total_value_count_out += 1;
-
-  /* 2. 向后扫描（更大的key） */
-  rc = mdb_cursor_get(cursor, &key, &val, MDB_NEXT);
-  while (rc == MDB_SUCCESS) {
-    if (!OBJ_KEY_PREFIX(obj_ptr, key))
+  // 遍历所有属于该对象的成员
+  do {
+    // 检查当前key是否还属于同一个对象
+    if (key.mv_size < 17 || memcmp(key.mv_data, obj_ptr->data, 17) != 0) {
+      // 已经移动到下一个对象，结束遍历
       break;
-    *total_value_len_out += val.mv_size;
+    }
+    
     *total_value_count_out += 1;
-    rc = mdb_cursor_get(cursor, &key, &val, MDB_NEXT);
+    *total_value_len_out += value.mv_size;
+    
+    // 移动到下一个key
+    rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT);
+  } while (rc == MDB_SUCCESS);
+
+  // MDB_NOTFOUND表示遍历结束，这是正常情况
+  if (rc == MDB_NOTFOUND) {
+    rc = LMJCORE_SUCCESS;
   }
 
-  /* 3. 重新定位到锚点，然后向前扫描（更小的key） */
-  rc = mdb_cursor_get(cursor, &key, &val, MDB_SET);
-  if (rc != MDB_SUCCESS) {
+cleanup:
+  if (cursor) {
     mdb_cursor_close(cursor);
-    return rc;
   }
-
-  rc = mdb_cursor_get(cursor, &key, &val, MDB_PREV);
-  while (rc == MDB_SUCCESS) {
-    if (!OBJ_KEY_PREFIX(obj_ptr, key))
-      break;
-    *total_value_len_out += val.mv_size;
-    *total_value_count_out += 1;
-    rc = mdb_cursor_get(cursor, &key, &val, MDB_PREV);
+  
+  // 如果出现错误，重置统计结果
+  if (rc != LMJCORE_SUCCESS) {
+    *total_value_count_out = 0;
+    *total_value_len_out = 0;
   }
-
-  mdb_cursor_close(cursor);
-  return LMJCORE_SUCCESS;
+  
+  return rc;
 }
+
 /**
  * @brief 统计数组元素长度
  *

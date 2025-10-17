@@ -167,8 +167,6 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
 
 // 对象工具函数
 int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                            const uint8_t *anchor_member,
-                            size_t anchor_member_len,
                             size_t *total_value_len_out,
                             size_t *total_value_count_out);
 

@@ -23,6 +23,11 @@ extern "C" {
 // 固定大小的错误报告
 #define LMJCORE_MAX_READ_ERRORS 8
 
+// 指针长度
+#define LMJCORE_PTR_LEN 17
+// 最长成员名
+#define LMJCORE_MAX_MEMBER_NAME_LEN 511 - LMJCORE_PTR_LEN - 1
+
 // 实体类型枚举
 typedef enum {
   LMJCORE_OBJ = 0x01, // 对象
@@ -139,62 +144,343 @@ typedef struct {
 } lmjcore_audit_report;
 
 // 初始化函数
+/**
+ * @brief 初始化lmjcore
+ *
+ * @param path 数据库存储路径
+ * @param map_size 映射内存大小
+ * @param ptr_gen 指针生成函数(可为null,使用默认uuid)
+ * @param ptr_gen_ctx 指针生成函数上下文(可为null)
+ * @param env lmjcore环境
+ * @return int
+ */
 int lmjcore_init(const char *path, size_t map_size,
                  lmjcore_ptr_generator_fn ptr_gen, void *ptr_gen_ctx,
                  lmjcore_env **env);
 
 // 清理函数
+/**
+ * @brief 清理lmjcore的环境
+ *
+ * @param env 环境变量
+ * @return int
+ */
 int lmjcore_cleanup(lmjcore_env *env);
 
 // 事务管理
+/**
+ * @brief 开启一个事务
+ *
+ * @param env lmjcore环境
+ * @param type 事务类型
+ * @param txn 事务指针(输出)
+ * @return int
+ */
 int lmjcore_txn_begin(lmjcore_env *env, lmjcore_txn_type type,
                       lmjcore_txn **txn);
+/**
+ * @brief 提交一个事务
+ *
+ * @param txn 事务
+ * @return int
+ */
 int lmjcore_txn_commit(lmjcore_txn *txn);
+/**
+ * @brief 终结一个事务
+ *
+ * @param txn 事务
+ * @return int
+ */
 int lmjcore_txn_abort(lmjcore_txn *txn);
 
 // 对象操作
-int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr *ptr);
+/**
+ * @brief 创建一个空对象
+ *
+ * @param txn 写事务
+ * @param ptr_out 返回对象指针
+ * @return int
+ */
+int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr *ptr_out);
+/**
+ * @brief 提交一个对象成员
+ *
+ * @param txn 写事务
+ * @param obj_ptr 对象指针
+ * @param member_name 成员名
+ * @param member_name_len 成员名长度
+ * @param value 成员的值
+ * @param value_len 值的长度
+ * @return int
+ */
 int lmjcore_obj_put(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
                     const uint8_t *member_name, size_t member_name_len,
                     const uint8_t *value, size_t value_len);
+/**
+ * @brief 获取整个对象
+ *
+ * @param txn 读事务
+ * @param obj_ptr 对象指针
+ * @param mode 读取模式
+ * @param result_buf 返回缓冲区
+ * @param result_buf_size 缓冲区大小
+ * @param result_head 返回头
+ * @return int
+ * 缓冲区内存布局定义：
+ * +------------------------+ ← result_buf (result)
+ * | lmjcore_result         | 固定头部
+ * +------------------------+
+ * | member_descriptors[]   | 描述符从前向后增长
+ * +------------------------+
+ * | ...                    |
+ * +------------------------+
+ * | name & value data      | 数据从后向前增长
+ * +------------------------+ ← result_buf + result_buf_size
+ */
 int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
                     lmjcore_query_mode mode, uint8_t *result_buf,
                     size_t result_buf_size, lmjcore_result **result_head);
+/**
+ * @brief 完全删除对象
+ * 
+ * 执行以下操作：
+ * 1. 从arr库获取对象的所有成员列表
+ * 2. 遍历删除main库中所有成员键值对
+ * 3. 删除arr库中的成员列表条目
+ * 4. 对象指针变为无效
+ * 
+ * @param txn 写事务
+ * @param obj_ptr 对象指针
+ * @return int 错误码
+ */
+int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr);
+/**
+ * @brief 获取一个对象成员的值
+ *
+ * @param txn 读事务
+ * @param obj_ptr 对象指针
+ * @param member_name 对象成员名称
+ * @param member_name_len 成员名长度
+ * @param value_buf 成员值缓冲区
+ * @param value_buf_size 缓冲区大小
+ * @param value_size 成员大小
+ * @return int
+ */
 int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                           const char *member_name, size_t member_name_len,
+                           const uint8_t *member_name, size_t member_name_len,
                            uint8_t *value_buf, size_t value_buf_size,
-                           size_t value_buf_offset, size_t *value_size);
+                           size_t *value_size);
+/**
+ * @brief 注册对象成员（不设置值）
+ * 
+ * 在arr库的对象成员列表中写入成员名，但在main库中不写入对应的值。
+ * 操作后该成员处于"缺失值"(Missing Value)状态，属于合法中间状态。
+ * 
+ * 适用场景：
+ * - 结构先行（Schema-first）设计
+ * - 分步初始化复杂对象
+ * - 预定义对象模板
+ * 
+ * @param txn 写事务
+ * @param obj_ptr 对象指针
+ * @param member_name 成员名称
+ * @param member_name_len 成员名称长度
+ * @return int 错误码
+ */
+int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                               const uint8_t *member_name, size_t member_name_len);
+/**
+ * @brief 删除对象成员的值（保留成员注册）
+ * 
+ * 仅删除main数据库中该成员的值，但成员名仍保留在arr库的成员列表中。
+ * 操作后该成员状态变为"缺失值"(Missing Value)。
+ * 
+ * @param txn 写事务
+ * @param obj_ptr 对象指针
+ * @param member_name 成员名称
+ * @param member_name_len 成员名称长度
+ * @return int 错误码
+ */
+int lmjcore_obj_member_value_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                                const uint8_t *member_name, size_t member_name_len);
+/**
+ * @brief 完全删除对象成员
+ * 
+ * 同时从arr库的成员列表和main库的键值对中删除该成员。
+ * 操作后该成员不再属于该对象。
+ * 
+ * @param txn 写事务
+ * @param obj_ptr 对象指针
+ * @param member_name 成员名称
+ * @param member_name_len 成员名称长度
+ * @return int 错误码
+ */
+int lmjcore_obj_member_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                          const uint8_t *member_name, size_t member_name_len);
 
 // 对象工具函数
+/**
+ * @brief 统计一个对象的成员值大小(可能统计到幽灵成员,建议与数组统计配合使用)
+ *
+ * @param txn 读事务
+ * @param obj_ptr 对象指针
+ * @param total_value_len_out 值的总长度(可能溢出)
+ * @param total_value_count_out 值的总个数
+ * @return int
+ */
 int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
                             size_t *total_value_len_out,
                             size_t *total_value_count_out);
 
 // 数组操作
-int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr *ptr);
+/**
+ * @brief 创建一个空数组
+ *
+ * @param txn 写事务
+ * @param ptr_out 输出数组指针
+ * @return int
+ */
+int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr *ptr_out);
+/**
+ * @brief 添加一个元素(不验证是否存在)
+ *
+ * @param txn 写事务
+ * @param arr_ptr 数组指针
+ * @param value 元素的值
+ * @param value_len 元素长度
+ * @return int
+ */
 int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
                        const uint8_t *value, size_t value_len);
+/**
+ * @brief 获取整个数组
+ *
+ * @param txn 读事务
+ * @param arr_ptr 数组指针
+ * @param mode 读取模式
+ * @param result_buf 返回缓冲区
+ * @param result_buf_size 缓冲区大小
+ * @param result_head 返回头
+ * @return int
+ * 缓冲区内存布局定义：
+ * +------------------------+ ← result_buf (result)
+ * | lmjcore_result         | 固定头部
+ * +------------------------+
+ * | descriptors[]          | 描述符从前向后增长
+ * +------------------------+
+ * | ...                    |
+ * +------------------------+
+ * | value data             | 数据从后向前增长
+ * +------------------------+ ← result_buf + result_buf_size
+ */
 int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
                     lmjcore_query_mode mode, uint8_t *result_buf,
                     size_t result_buf_size, lmjcore_result **result_head);
 
+/**
+ * @brief 完全删除数组
+ * 
+ * 执行以下操作：
+ * 1. 删除arr库中该数组指针对应的所有值
+ * 2. 数组指针变为无效
+ * 
+ * @param txn 写事务
+ * @param arr_ptr 数组指针
+ * @return int 错误码
+ */
+int lmjcore_arr_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr);
+
 // 数组工具函数
+/**
+ * @brief 统计数组/成员列表的元素大小
+ *
+ * @param txn 读事务
+ * @param ptr 指针
+ * @param total_value_len_out 总长度输出
+ * @param element_count_out 元素数量
+ * @return int
+ */
 int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr *ptr,
                              size_t *total_value_len_out,
                              size_t *element_count_out);
 
 // 指针工具函数
+/**
+ * @brief lmjcore指针转字符串
+ *
+ * @param ptr 指针
+ * @param str_buf 字符串缓冲区
+ * @param buf_size 缓冲区大小
+ * @return int
+ */
 int lmjcore_ptr_to_string(const lmjcore_ptr *ptr, char *str_buf,
                           size_t buf_size);
-int lmjcore_ptr_from_string(const char *str, lmjcore_ptr *ptr);
+/**
+ * @brief 字符串转lmjcore指针
+ *
+ * @param str 字符串
+ * @param ptr_out 指针输出
+ * @return int
+ */
+int lmjcore_ptr_from_string(const char *str, lmjcore_ptr *ptr_out);
 
 // 存在性检查
-int lmjcore_exist(lmjcore_txn *txn, const lmjcore_ptr *ptr);
+/**
+ * @brief 实体探针(检查实体[对象/数组]是否存在)
+ *
+ * @param txn 读事务
+ * @param ptr 指针
+ * @return int
+ */
+int lmjcore_entity_exist(lmjcore_txn *txn, const lmjcore_ptr *ptr);
+/**
+ * @brief 对象成员值探针(检查对象成员的值是否存在)
+ *
+ * @param txn 读事务
+ * @param obj_ptr 对象指针
+ * @param member_name 成员名
+ * @param member_name_len 成语名长度
+ * @return int
+ */
+int lmjcore_obj_member_value_exist(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                                   const uint8_t *member_name,
+                                   size_t member_name_len);
 
 // 审计与修复
+/**
+ * @brief 审计一个对象(检查对象是否存在幽灵成员,缺失值)
+ *
+ * @param txn 读事务
+ * @param obj_ptr 对象指针
+ * @param report_buf 审计报告缓冲区
+ * @param report_buf_size 缓冲区大小
+ * @param report_head 缓冲区头
+ * @return int
+ * 审计报告内存布局
+ * report_buf内存结构
+ * ---------------------  <-- report_buf(report_head)
+ * |report_head         |
+ * ---------------------
+ * |report_descriptor   | <-- 前往后
+ * ----------------------
+ * |....                |
+ * ----------------------
+ * | member_name        | <-- 由后往前
+ * ---------------------- <-- data_offset(report_buf_size)
+ */
 int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
                          uint8_t *report_buf, size_t report_buf_size,
                          lmjcore_audit_report **report_head);
+/**
+ * @brief
+ * 使用审计报告修复幽灵成员(删除幽灵成员).如果需要重新将幽灵成员注册为成员需要手动注册,因为内核无法判断幽灵成员的值是否可用
+ *
+ * @param txn 读事务
+ * @param report_buf 报告缓冲区
+ * @param report_buf_size 缓冲区大小
+ * @param report 报告
+ * @return int
+ */
 int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
                           size_t report_buf_size, lmjcore_audit_report *report);
 

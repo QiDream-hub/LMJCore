@@ -1,4 +1,5 @@
 #include "../../include/lmjcore.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,7 +10,8 @@ int main() {
   lmjcore_txn *txn = NULL;
 
   // 初始化环境
-  int rc = lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100, NULL, NULL, &env);
+  int rc =
+      lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100, 0, NULL, NULL, &env);
   if (rc != LMJCORE_SUCCESS) {
     printf("初始化失败: %d\n", rc);
     return 1;
@@ -21,6 +23,22 @@ int main() {
     printf("事务开始失败: %d\n", rc);
     lmjcore_cleanup(env);
     return 1;
+  }
+
+  lmjcore_ptr arr_ptr;
+  // 创建数组
+  rc = lmjcore_arr_create(txn, &arr_ptr);
+  if (rc != LMJCORE_SUCCESS) {
+    printf("数组创建失败");
+    lmjcore_txn_abort(txn);
+    lmjcore_cleanup(env);
+  }
+  rc = lmjcore_arr_append(txn, &arr_ptr, (uint8_t *)"const uint8_t *value",
+                          sizeof("const uint8_t *value"));
+  if (rc != LMJCORE_SUCCESS) {
+    printf("数组提交元素失败");
+    lmjcore_txn_abort(txn);
+    lmjcore_cleanup(env);
   }
 
   // 创建对象
@@ -42,9 +60,9 @@ int main() {
   const char *name = "John Doe";
   const char *email = "john@example.com";
 
-  rc = lmjcore_obj_put(txn, &obj_ptr, (uint8_t *)"name", 4, (uint8_t *)name,
+  rc = lmjcore_obj_member_put(txn, &obj_ptr, (uint8_t *)"name", 4, (uint8_t *)name,
                        strlen(name));
-  rc = lmjcore_obj_put(txn, &obj_ptr, (uint8_t *)"email", 5, (uint8_t *)email,
+  rc = lmjcore_obj_member_put(txn, &obj_ptr, (uint8_t *)"email", 5, (uint8_t *)email,
                        strlen(email));
 
   // 提交事务
@@ -66,7 +84,8 @@ int main() {
 
       printf("成员: %.*s, 值长度: %d\n", desc->name_len, member_name,
              desc->value_len);
-      printf("%.*s : %.*s\n",desc->name_len,member_name,desc->value_len,value);  
+      printf("%.*s : %.*s\n", desc->name_len, member_name, desc->value_len,
+             value);
     }
   }
 
@@ -74,7 +93,7 @@ int main() {
 
   // 清理
   lmjcore_cleanup(env);
-//   printf("操作成功完成\n");
+  //   printf("操作成功完成\n");
 
   return 0;
 }

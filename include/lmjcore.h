@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <lmdb.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,12 @@ extern "C" {
 #define LMJCORE_ERROR_BUFFER_TOO_SMALL -32005 // 缓冲区太小
 #define LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED -32006 // 内存申请错误
 #define LMJCORE_ERROR_STRICT_MODE_VIOLATION -32007    // 严格模式读取错误
+
+#define LMJCORE_WRITEMAP MDB_WRITEMAP // 使用写内存映射（提升性能）
+#define LMJCORE_NOSYNC MDB_NOSYNC // 不强制同步元数据到磁盘
+#define LMJCORE_NOMETASYNC MDB_NOMETASYNC // 不强制同步数据到磁盘
+#define LMJCORE_MAPASYNC MDB_MAPASYNC // 使用异步回写
+#define LMJCORE_NOTLS MDB_NOTLS // 不使用线程局部存储
 
 // 固定大小的错误报告
 #define LMJCORE_MAX_READ_ERRORS 8
@@ -154,7 +161,7 @@ typedef struct {
  * @param env lmjcore环境
  * @return int
  */
-int lmjcore_init(const char *path, size_t map_size,
+int lmjcore_init(const char *path, size_t map_size, unsigned int flags,
                  lmjcore_ptr_generator_fn ptr_gen, void *ptr_gen_ctx,
                  lmjcore_env **env);
 
@@ -202,20 +209,6 @@ int lmjcore_txn_abort(lmjcore_txn *txn);
  * @return int
  */
 int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr *ptr_out);
-/**
- * @brief 提交一个对象成员
- *
- * @param txn 写事务
- * @param obj_ptr 对象指针
- * @param member_name 成员名
- * @param member_name_len 成员名长度
- * @param value 成员的值
- * @param value_len 值的长度
- * @return int
- */
-int lmjcore_obj_put(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                    const uint8_t *member_name, size_t member_name_len,
-                    const uint8_t *value, size_t value_len);
 /**
  * @brief 获取整个对象
  *
@@ -270,6 +263,21 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
                            const uint8_t *member_name, size_t member_name_len,
                            uint8_t *value_buf, size_t value_buf_size,
                            size_t *value_size);
+/**
+ * @brief 提交一个对象成员
+ *
+ * @param txn 写事务
+ * @param obj_ptr 对象指针
+ * @param member_name 成员名
+ * @param member_name_len 成员名长度
+ * @param value 成员的值
+ * @param value_len 值的长度
+ * @return int
+ */
+int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+                    const uint8_t *member_name, size_t member_name_len,
+                    const uint8_t *value, size_t value_len);
+
 /**
  * @brief 注册对象成员（不设置值）
  * 

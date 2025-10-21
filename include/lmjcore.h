@@ -1,10 +1,10 @@
 #ifndef LMJCORE_H
 #define LMJCORE_H
 
+#include <lmdb.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <lmdb.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,11 +21,11 @@ extern "C" {
 #define LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED -32006 // 内存申请错误
 #define LMJCORE_ERROR_STRICT_MODE_VIOLATION -32007    // 严格模式读取错误
 
-#define LMJCORE_WRITEMAP MDB_WRITEMAP // 使用写内存映射（提升性能）
-#define LMJCORE_NOSYNC MDB_NOSYNC // 不强制同步元数据到磁盘
+#define LMJCORE_WRITEMAP MDB_WRITEMAP     // 使用写内存映射（提升性能）
+#define LMJCORE_NOSYNC MDB_NOSYNC         // 不强制同步元数据到磁盘
 #define LMJCORE_NOMETASYNC MDB_NOMETASYNC // 不强制同步数据到磁盘
-#define LMJCORE_MAPASYNC MDB_MAPASYNC // 使用异步回写
-#define LMJCORE_NOTLS MDB_NOTLS // 不使用线程局部存储
+#define LMJCORE_MAPASYNC MDB_MAPASYNC     // 使用异步回写
+#define LMJCORE_NOTLS MDB_NOTLS           // 不使用线程局部存储
 
 // 固定大小的错误报告
 #define LMJCORE_MAX_READ_ERRORS 8
@@ -235,13 +235,13 @@ int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
                     size_t result_buf_size, lmjcore_result **result_head);
 /**
  * @brief 完全删除对象
- * 
+ *
  * 执行以下操作：
  * 1. 从arr库获取对象的所有成员列表
  * 2. 遍历删除main库中所有成员键值对
  * 3. 删除arr库中的成员列表条目
  * 4. 对象指针变为无效
- * 
+ *
  * @param txn 写事务
  * @param obj_ptr 对象指针
  * @return int 错误码
@@ -275,20 +275,20 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @return int
  */
 int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                    const uint8_t *member_name, size_t member_name_len,
-                    const uint8_t *value, size_t value_len);
+                           const uint8_t *member_name, size_t member_name_len,
+                           const uint8_t *value, size_t value_len);
 
 /**
  * @brief 注册对象成员（不设置值）
- * 
+ *
  * 在arr库的对象成员列表中写入成员名，但在main库中不写入对应的值。
  * 操作后该成员处于"缺失值"(Missing Value)状态，属于合法中间状态。
- * 
+ *
  * 适用场景：
  * - 结构先行（Schema-first）设计
  * - 分步初始化复杂对象
  * - 预定义对象模板
- * 
+ *
  * @param txn 写事务
  * @param obj_ptr 对象指针
  * @param member_name 成员名称
@@ -296,13 +296,14 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @return int 错误码
  */
 int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                               const uint8_t *member_name, size_t member_name_len);
+                                const uint8_t *member_name,
+                                size_t member_name_len);
 /**
  * @brief 删除对象成员的值（保留成员注册）
- * 
+ *
  * 仅删除main数据库中该成员的值，但成员名仍保留在arr库的成员列表中。
  * 操作后该成员状态变为"缺失值"(Missing Value)。
- * 
+ *
  * @param txn 写事务
  * @param obj_ptr 对象指针
  * @param member_name 成员名称
@@ -310,13 +311,14 @@ int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @return int 错误码
  */
 int lmjcore_obj_member_value_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                                const uint8_t *member_name, size_t member_name_len);
+                                 const uint8_t *member_name,
+                                 size_t member_name_len);
 /**
  * @brief 完全删除对象成员
- * 
+ *
  * 同时从arr库的成员列表和main库的键值对中删除该成员。
  * 操作后该成员不再属于该对象。
- * 
+ *
  * @param txn 写事务
  * @param obj_ptr 对象指针
  * @param member_name 成员名称
@@ -324,7 +326,7 @@ int lmjcore_obj_member_value_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @return int 错误码
  */
 int lmjcore_obj_member_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
-                          const uint8_t *member_name, size_t member_name_len);
+                           const uint8_t *member_name, size_t member_name_len);
 
 // 对象工具函数
 /**
@@ -384,20 +386,29 @@ int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
 int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
                     lmjcore_query_mode mode, uint8_t *result_buf,
                     size_t result_buf_size, lmjcore_result **result_head);
-
 /**
  * @brief 完全删除数组
- * 
+ *
  * 执行以下操作：
  * 1. 删除arr库中该数组指针对应的所有值
  * 2. 数组指针变为无效
- * 
+ *
  * @param txn 写事务
  * @param arr_ptr 数组指针
  * @return int 错误码
  */
 int lmjcore_arr_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr);
-
+/**
+ * @brief 删除数组中的元素
+ * 
+ * @param txn 写事务
+ * @param arr_ptr 数组指针
+ * @param element 元素
+ * @param element_len 元素长度
+ * @return int 
+ */
+int lmjcore_arr_element_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
+                            const uint8_t *element, size_t element_len);
 // 数组工具函数
 /**
  * @brief 统计数组/成员列表的元素大小

@@ -14,8 +14,8 @@
 #define MAX_MEMBER_NAME_LEN 50
 #define MAX_VALUE_LEN 100
 
-#define EVN_OP  0                                                             \
-//   LMJCORE_WRITEMAP | LMJCORE_NOSYNC | LMJCORE_NOMETASYNC | LMJCORE_MAPASYNC
+#define ENV_OP                                                               \
+  LMJCORE_WRITEMAP | LMJCORE_NOSYNC | LMJCORE_NOMETASYNC | LMJCORE_MAPASYNC
 
 // 时间戳缓冲区大小
 #define TIMESTAMP_BUFFER_SIZE 64
@@ -351,7 +351,7 @@ void memory_leak_test() {
   lmjcore_env *env = NULL;
 
   // 初始化环境
-  if (lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 100, EVN_OP, NULL, NULL, &env) !=
+  if (lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 100, ENV_OP, NULL, NULL, &env) !=
       LMJCORE_SUCCESS) {
     print_with_timestamp(
         "Failed to initialize environment for memory leak test\n");
@@ -400,7 +400,7 @@ int main() {
 
   // 初始化LMJCore环境
   int ret =
-      lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 500, EVN_OP, NULL, NULL, &env);
+      lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 500, ENV_OP, NULL, NULL, &env);
   if (ret != LMJCORE_SUCCESS) {
     print_with_timestamp("Failed to initialize LMJCore: %d\n", ret);
     return 1;

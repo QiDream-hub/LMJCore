@@ -890,6 +890,7 @@ int lmjcore_obj_member_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * 1.lmjcore_arr_create
  * 2.lmjcore_arr_append
  * 3.lmjcore_arr_get
+ * 4.lmjcore_arr_element_del
  *==========================================
  */
 // 创建数组
@@ -942,6 +943,35 @@ int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
   return LMJCORE_SUCCESS;
 }
 
+// 删除这个数组
+int lmjcore_arr_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr) {
+  if (!txn || !arr_ptr || txn->type != LMJCORE_TXN_WRITE ||
+      arr_ptr->data[0] != LMJCORE_ARR) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+  MDB_val key = {.mv_data = (void *)arr_ptr->data, .mv_size = LMJCORE_PTR_LEN};
+  int rc = mdb_del(txn->mdb_txn, txn->env->arr_dbi, &key, NULL);
+  if (rc != MDB_SUCCESS) {
+    return rc;
+  }
+  return LMJCORE_SUCCESS;
+}
+
+// 删除数组中的元素
+int lmjcore_arr_element_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
+                            const uint8_t *element, size_t element_len) {
+  if (!txn || !arr_ptr || !element || txn->type != LMJCORE_TXN_WRITE ||
+      arr_ptr->data[0] != LMJCORE_ARR) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+  MDB_val key = {.mv_data = (void*)arr_ptr->data,.mv_size = LMJCORE_PTR_LEN};
+  MDB_val vale = {.mv_data = (void*)element,.mv_size = element_len};
+  int rc = mdb_del(txn->mdb_txn, txn->env->arr_dbi, &key, &vale);
+  if (rc != MDB_SUCCESS) {
+    return rc; 
+  }
+  return LMJCORE_SUCCESS;
+}
 /**
  * @brief 统计对象成员的数据大小（从指定锚点成员开始双向扫描）
  * @param txn 事务句柄
@@ -1143,6 +1173,7 @@ int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
 /*
  *==========================================
  * 数组工具函数
+ * 1.lmjcore_arr_stat_element
  *==========================================
  */
 /**

@@ -1,4 +1,5 @@
 #include "../../Toolkit/config_obj_toolkit/include/lmjcore_config.h"
+#include <lmdb.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -10,7 +11,7 @@ void test_config_basic_operations() {
     lmjcore_txn *txn = NULL;
     
     // 初始化环境
-    int ret = lmjcore_init("/tmp/test_config", 1024 * 1024, 0, NULL, NULL, &env);
+    int ret = lmjcore_init("./lmjcore_db/config_test/_1", 1024 * 1024, 0 | LMJCORE_NOSUBDIR, NULL, NULL, &env);
     assert(ret == LMJCORE_SUCCESS);
     
     // 开始写事务
@@ -71,7 +72,7 @@ void test_config_lazy_initialization() {
     lmjcore_txn *txn = NULL;
     
     // 初始化环境
-    int ret = lmjcore_init("/tmp/test_config_lazy", 1024 * 1024, 0, NULL, NULL, &env);
+    int ret = lmjcore_init("./lmjcore_db/config_test/_2", 1024 * 1024, 0 | LMJCORE_NOSUBDIR, NULL, NULL, &env);
     assert(ret == LMJCORE_SUCCESS);
     
     // 开始写事务
@@ -115,7 +116,7 @@ void test_config_error_handling() {
     lmjcore_txn *txn = NULL;
     
     // 初始化环境
-    int ret = lmjcore_init("/tmp/test_config_errors", 1024 * 1024, 0, NULL, NULL, &env);
+    int ret = lmjcore_init("./lmjcore_db/config_test/_3", 1024 * 1024, 0 | LMJCORE_NOSUBDIR, NULL, NULL, &env);
     assert(ret == LMJCORE_SUCCESS);
     
     // 开始读事务
@@ -140,6 +141,10 @@ void test_config_error_handling() {
     assert(ret == LMJCORE_SUCCESS);
     
     // 现在尝试获取不存在的配置项
+    lmjcore_txn_commit(txn);
+    ret = lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+    assert(ret == LMJCORE_SUCCESS);
+
     ret = lmjcore_config_get(txn, (const uint8_t*)test_key, strlen(test_key),
                             value_buf, sizeof(value_buf), &value_size);
     assert(ret == LMJCORE_ERROR_MEMBER_NOT_FOUND);

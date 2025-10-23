@@ -8,9 +8,6 @@
 extern "C" {
 #endif
 
-// 错误码定义
-#define LMJCORE_ERROR_MEMBER_NOT_FOUND -33000
-
 // 类型前缀为对象，其余为0
 static const uint8_t LMJCORE_CONFIG_OBJECT_PTR[LMJCORE_PTR_LEN] = {
     LMJCORE_OBJ,  // 类型前缀

@@ -1,4 +1,5 @@
 #include "../include/lmjcore_config.h"
+#include <stdio.h>
 #include <string.h>
 
 const lmjcore_ptr *lmjcore_config_object_ptr() {

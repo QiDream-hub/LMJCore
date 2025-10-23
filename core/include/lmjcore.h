@@ -20,13 +20,39 @@ extern "C" {
 #define LMJCORE_ERROR_BUFFER_TOO_SMALL -32005         // 输出缓冲区空间不足
 #define LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED -32006 // 内存分配失败
 #define LMJCORE_ERROR_STRICT_MODE_VIOLATION -32007    // 严格模式校验失败
+#define LMJCORE_ERROR_MEMBER_NOT_FOUND -32008         // 成员值不存在(缺失值)
 
 // 环境标志位（映射 LMDB 标志）
-#define LMJCORE_WRITEMAP MDB_WRITEMAP     // 启用写时内存映射（提升写入性能）
-#define LMJCORE_NOSYNC MDB_NOSYNC         // 写入后不强制同步元数据
-#define LMJCORE_NOMETASYNC MDB_NOMETASYNC // 不强制同步数据至磁盘
-#define LMJCORE_MAPASYNC MDB_MAPASYNC     // 使用异步回写模式
-#define LMJCORE_NOTLS MDB_NOTLS           // 禁用线程局部存储
+/**
+ * LMDB 环境标志位完整映射
+ * 参考：https://lmdb.readthedocs.io/en/release/#environment-flags
+ */
+
+// 文件操作相关标志
+#define LMJCORE_FIXEDMAP    MDB_FIXEDMAP    // 使用固定内存映射
+#define LMJCORE_NOSUBDIR    MDB_NOSUBDIR    // 环境文件直接放在路径中，不创建子目录
+#define LMJCORE_NOSYNC      MDB_NOSYNC      // 不强制将数据同步到磁盘（写入后立即返回）
+#define LMJCORE_RDONLY      MDB_RDONLY      // 以只读模式打开环境
+#define LMJCORE_NOMETASYNC  MDB_NOMETASYNC  // 不强制在提交后同步元数据
+#define LMJCORE_WRITEMAP    MDB_WRITEMAP    // 使用写时内存映射（提升写入性能）
+#define LMJCORE_MAPASYNC    MDB_MAPASYNC    // 在同步模式下使用异步回写
+#define LMJCORE_NOTLS       MDB_NOTLS       // 禁用线程局部存储
+
+// 数据库操作相关标志
+#define LMJCORE_NOLOCK      MDB_NOLOCK      // 不使用任何锁（实验性）
+#define LMJCORE_NORDAHEAD   MDB_NORDAHEAD   // 禁用预读
+#define LMJCORE_NOMEMINIT   MDB_NOMEMINIT   // 不初始化内存（提升性能，但有安全风险）
+
+// 组合标志（常用配置模式）
+#define LMJCORE_SAFE_SYNC       0                                     // 安全同步模式（默认）
+#define LMJCORE_MAX_PERF        (LMJCORE_WRITEMAP | LMJCORE_MAPASYNC) // 最大性能模式
+#define LMJCORE_READONLY_MODE   LMJCORE_RDONLY                        // 只读模式
+#define LMJCORE_NO_DISK_SYNC    (LMJCORE_NOSYNC | LMJCORE_NOMETASYNC) // 无磁盘同步模式
+
+// 兼容性标志（不同版本的 LMDB）
+#ifdef MDB_PREVSNAPSHOT
+#define LMJCORE_PREVSNAPSHOT    MDB_PREVSNAPSHOT  // 允许从先前快照读取
+#endif
 
 // 固定容量的错误报告上限
 #define LMJCORE_MAX_READ_ERRORS 8

@@ -486,7 +486,7 @@ int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
 
 // 注册对象
 int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr) {
-  if (!txn || !ptr || txn->type == LMJCORE_TXN_WRITE || ptr[0] != LMJCORE_OBJ ||
+  if (!txn || !ptr || txn->type != LMJCORE_TXN_WRITE || ptr[0] != LMJCORE_OBJ ||
       lmjcore_entity_exist(txn, ptr)) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
@@ -873,8 +873,14 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   MDB_val value;
   rc = mdb_get(txn->mdb_txn, txn->env->main_dbi, &key, &value);
   free(t_key);
+
+  // 转换 LMDB 错误码为 LMJCore 错误码
+  if (rc == MDB_NOTFOUND) {
+    return LMJCORE_ERROR_MEMBER_NOT_FOUND;
+  }
+
   if (rc != MDB_SUCCESS) {
-    return rc; // 注意如果是缺值状态(arr库中存在mian库未找到)会返回MDB_NOTFOUND调用者注意检查以及处理
+    return rc; // 其他错误
   }
 
   // 检查缓冲区是否足够

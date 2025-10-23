@@ -1,3 +1,5 @@
 lmjcore_db/**
 bin/**
+build/**
 **.o
+**.so

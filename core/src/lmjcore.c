@@ -1,4 +1,4 @@
-#include "../../include/lmjcore.h"
+#include "../include/lmjcore.h"
 #include <complex.h>
 #include <lmdb.h>
 #include <stdbool.h>
@@ -203,8 +203,8 @@ static bool add_entity_not_found_error(lmjcore_result *result,
 /**
  * @brief 添加LMDB操作错误
  */
-static bool add_lmdb_error(lmjcore_result *result,
-                           const lmjcore_ptr entity_ptr, int error_code) {
+static bool add_lmdb_error(lmjcore_result *result, const lmjcore_ptr entity_ptr,
+                           int error_code) {
   return add_error_to_result(result, LMJCORE_READERR_LMDB_FAILED, entity_ptr, 0,
                              0, error_code);
 }
@@ -226,7 +226,7 @@ static bool add_member_missing_error(lmjcore_result *result,
 static int add_audit(lmjcore_audit_report *report, uint8_t *buf,
                      lmjcore_audit_error_code error, const MDB_val *member_name,
                      const lmjcore_ptr obj_ptr, size_t *data_offset,
-                     size_t *report_descriptor_offset, size_t total_buf_size) {
+                     size_t *report_descriptor_offset) {
   if (!report || !buf || !member_name || !obj_ptr || !data_offset ||
       !report_descriptor_offset) {
     return LMJCORE_ERROR_INVALID_PARAM;
@@ -265,6 +265,7 @@ static int add_audit(lmjcore_audit_report *report, uint8_t *buf,
 
 // 默认指针生成器 (UUIDv4)
 static int default_ptr_generator(void *ctx, uint8_t out[LMJCORE_PTR_LEN]) {
+  (void)ctx;
   uuid_t uuid;
   uuid_generate(uuid);
 
@@ -485,8 +486,8 @@ int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
 
 // 注册对象
 int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr) {
-  if (!txn || !ptr || txn->type == LMJCORE_TXN_WRITE ||
-      ptr[0] != LMJCORE_OBJ || lmjcore_entity_exist(txn, ptr)) {
+  if (!txn || !ptr || txn->type == LMJCORE_TXN_WRITE || ptr[0] != LMJCORE_OBJ ||
+      lmjcore_entity_exist(txn, ptr)) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
   // 在 arr 数据库中创建空成员列表（不存储任何值，仅表示对象存在）
@@ -756,8 +757,7 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   }
 
   // 在 arr 数据库中注册成员名（如果尚未注册）
-  MDB_val arr_key = {.mv_size = LMJCORE_PTR_LEN,
-                     .mv_data = (void *)obj_ptr};
+  MDB_val arr_key = {.mv_size = LMJCORE_PTR_LEN, .mv_data = (void *)obj_ptr};
   MDB_val arr_val = {.mv_size = member_name_len,
                      .mv_data = (void *)member_name};
 
@@ -1328,9 +1328,9 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
       // 尝试从 registered_members 中移除（表示该成员已注册且有值）
       if (!mdb_val_list_remove(&registered_members, &member_name)) {
         // 未注册 → 幽灵成员
-        int err = add_audit(report, report_buf, LMJCORE_AUDITERR_GHOST_MEMBER,
-                            &member_name, obj_ptr, &data_offset,
-                            &report_desc_offset, report_buf_size);
+        int err =
+            add_audit(report, report_buf, LMJCORE_AUDITERR_GHOST_MEMBER,
+                      &member_name, obj_ptr, &data_offset, &report_desc_offset);
         if (err != LMJCORE_SUCCESS) {
           rc = err;
           goto cleanup;
@@ -1348,8 +1348,7 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   MDB_val_list *node = registered_members;
   while (node) {
     int err = add_audit(report, report_buf, LMJCORE_AUDITERR_MISSING_VALUE,
-                        &node->val, obj_ptr, &data_offset, &report_desc_offset,
-                        report_buf_size);
+                        &node->val, obj_ptr, &data_offset, &report_desc_offset);
     if (err != LMJCORE_SUCCESS) {
       rc = err;
       goto cleanup;

@@ -106,9 +106,9 @@ lmjcore_cleanup(env);
 ### 指针系统
 17字节固定长度指针，包含1字节类型前缀和16字节唯一标识：
 ```c
-typedef struct {
-    uint8_t data[17];  // 1字节类型 + 16字节唯一ID
-} lmjcore_ptr;
+
+typedef uint8_t lmjcore_ptr[LMJCORE_PTR_LEN];
+
 ```
 
 ### 数据存储模型

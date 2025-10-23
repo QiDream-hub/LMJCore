@@ -1,4 +1,4 @@
-#include "../../include/lmjcore.h"
+#include "../../core/include/lmjcore.h"
 #include <stdio.h>
 
 int main() {

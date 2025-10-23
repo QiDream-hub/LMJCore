@@ -27,13 +27,13 @@ int main() {
 
   lmjcore_ptr arr_ptr;
   // 创建数组
-  rc = lmjcore_arr_create(txn, &arr_ptr);
+  rc = lmjcore_arr_create(txn, arr_ptr);
   if (rc != LMJCORE_SUCCESS) {
     printf("数组创建失败");
     lmjcore_txn_abort(txn);
     lmjcore_cleanup(env);
   }
-  rc = lmjcore_arr_append(txn, &arr_ptr, (uint8_t *)"const uint8_t *value",
+  rc = lmjcore_arr_append(txn, arr_ptr, (uint8_t *)"const uint8_t *value",
                           sizeof("const uint8_t *value"));
   if (rc != LMJCORE_SUCCESS) {
     printf("数组提交元素失败");
@@ -43,7 +43,7 @@ int main() {
 
   // 创建对象
   lmjcore_ptr obj_ptr;
-  rc = lmjcore_obj_create(txn, &obj_ptr);
+  rc = lmjcore_obj_create(txn, obj_ptr);
   if (rc != LMJCORE_SUCCESS) {
     printf("对象创建失败: %d\n", rc);
     lmjcore_txn_abort(txn);
@@ -53,16 +53,16 @@ int main() {
 
   // 转换为可读字符串
   char ptr_str[35];
-  lmjcore_ptr_to_string(&obj_ptr, ptr_str, sizeof(ptr_str));
+  lmjcore_ptr_to_string(obj_ptr, ptr_str, sizeof(ptr_str));
   printf("创建对象: %s\n", ptr_str);
 
   // 写入成员数据
   const char *name = "John Doe";
   const char *email = "john@example.com";
 
-  rc = lmjcore_obj_member_put(txn, &obj_ptr, (uint8_t *)"name", 4, (uint8_t *)name,
+  rc = lmjcore_obj_member_put(txn, obj_ptr, (uint8_t *)"name", 4, (uint8_t *)name,
                        strlen(name));
-  rc = lmjcore_obj_member_put(txn, &obj_ptr, (uint8_t *)"email", 5, (uint8_t *)email,
+  rc = lmjcore_obj_member_put(txn, obj_ptr, (uint8_t *)"email", 5, (uint8_t *)email,
                        strlen(email));
 
   // 提交事务
@@ -73,7 +73,7 @@ int main() {
 
   uint8_t result_buf[8192];
   lmjcore_result *result;
-  rc = lmjcore_obj_get(txn, &obj_ptr, LMJCORE_MODE_LOOSE, result_buf,
+  rc = lmjcore_obj_get(txn, obj_ptr, LMJCORE_MODE_LOOSE, result_buf,
                        sizeof(result_buf), &result);
 
   if (rc == LMJCORE_SUCCESS) {

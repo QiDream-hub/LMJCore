@@ -14,7 +14,7 @@
 #define MAX_MEMBER_NAME_LEN 50
 #define MAX_VALUE_LEN 100
 
-#define ENV_OP                                                               \
+#define ENV_OP                                                                 \
   LMJCORE_WRITEMAP | LMJCORE_NOSYNC | LMJCORE_NOMETASYNC | LMJCORE_MAPASYNC
 
 // 时间戳缓冲区大小
@@ -87,7 +87,7 @@ void *stress_test_thread(void *arg) {
     }
 
     // 创建对象
-    ret = lmjcore_obj_create(txn, &obj_ptr);
+    ret = lmjcore_obj_create(txn, obj_ptr);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
       lmjcore_txn_abort(txn);
@@ -103,9 +103,9 @@ void *stress_test_thread(void *arg) {
       generate_random_string(member_name, sizeof(member_name));
       generate_random_string(value, sizeof(value));
 
-      ret = lmjcore_obj_member_put(txn, &obj_ptr, (const uint8_t *)member_name,
-                            strlen(member_name), (const uint8_t *)value,
-                            strlen(value));
+      ret = lmjcore_obj_member_put(txn, obj_ptr, (const uint8_t *)member_name,
+                                   strlen(member_name), (const uint8_t *)value,
+                                   strlen(value));
       if (ret != LMJCORE_SUCCESS) {
         ctx->error_count++;
         break;
@@ -127,7 +127,7 @@ void *stress_test_thread(void *arg) {
         uint8_t result_buf[4096];
         lmjcore_result *result = NULL;
 
-        ret = lmjcore_obj_get(read_txn, &obj_ptr, LMJCORE_MODE_LOOSE,
+        ret = lmjcore_obj_get(read_txn, obj_ptr, LMJCORE_MODE_LOOSE,
                               result_buf, sizeof(result_buf), &result);
         if (ret == LMJCORE_SUCCESS) {
           ctx->success_count++;
@@ -171,7 +171,7 @@ void *array_stress_test_thread(void *arg) {
     }
 
     // 创建数组
-    ret = lmjcore_arr_create(txn, &arr_ptr);
+    ret = lmjcore_arr_create(txn, arr_ptr);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
       lmjcore_txn_abort(txn);
@@ -185,7 +185,7 @@ void *array_stress_test_thread(void *arg) {
     for (int j = 0; j < num_elements; j++) {
       generate_random_string(value, sizeof(value));
 
-      ret = lmjcore_arr_append(txn, &arr_ptr, (const uint8_t *)value,
+      ret = lmjcore_arr_append(txn, arr_ptr, (const uint8_t *)value,
                                strlen(value));
       if (ret != LMJCORE_SUCCESS) {
         ctx->error_count++;
@@ -226,7 +226,7 @@ void *mixed_operations_thread(void *arg) {
   // 首先创建一个持久化对象
   lmjcore_txn *init_txn = NULL;
   if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &init_txn) == LMJCORE_SUCCESS) {
-    if (lmjcore_obj_create(init_txn, &persistent_obj) == LMJCORE_SUCCESS) {
+    if (lmjcore_obj_create(init_txn, persistent_obj) == LMJCORE_SUCCESS) {
       obj_created = 1;
       lmjcore_txn_commit(init_txn);
     } else {
@@ -243,16 +243,17 @@ void *mixed_operations_thread(void *arg) {
       lmjcore_ptr obj_ptr;
 
       if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn) == LMJCORE_SUCCESS) {
-        if (lmjcore_obj_create(txn, &obj_ptr) == LMJCORE_SUCCESS) {
+        if (lmjcore_obj_create(txn, obj_ptr) == LMJCORE_SUCCESS) {
           char member_name[MAX_MEMBER_NAME_LEN];
           char value[MAX_VALUE_LEN];
 
           generate_random_string(member_name, sizeof(member_name));
           generate_random_string(value, sizeof(value));
 
-          if (lmjcore_obj_member_put(txn, &obj_ptr, (const uint8_t *)member_name,
-                              strlen(member_name), (const uint8_t *)value,
-                              strlen(value)) == LMJCORE_SUCCESS) {
+          if (lmjcore_obj_member_put(txn, obj_ptr, (const uint8_t *)member_name,
+                                     strlen(member_name),
+                                     (const uint8_t *)value,
+                                     strlen(value)) == LMJCORE_SUCCESS) {
             ctx->success_count++;
           } else {
             ctx->error_count++;
@@ -268,13 +269,13 @@ void *mixed_operations_thread(void *arg) {
       lmjcore_ptr arr_ptr;
 
       if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn) == LMJCORE_SUCCESS) {
-        if (lmjcore_arr_create(txn, &arr_ptr) == LMJCORE_SUCCESS) {
+        if (lmjcore_arr_create(txn, arr_ptr) == LMJCORE_SUCCESS) {
           char value[MAX_VALUE_LEN];
           int num_elements = (rand() % 5) + 1;
 
           for (int j = 0; j < num_elements; j++) {
             generate_random_string(value, sizeof(value));
-            lmjcore_arr_append(txn, &arr_ptr, (const uint8_t *)value,
+            lmjcore_arr_append(txn, arr_ptr, (const uint8_t *)value,
                                strlen(value));
           }
           ctx->success_count++;
@@ -292,7 +293,7 @@ void *mixed_operations_thread(void *arg) {
           uint8_t result_buf[2048];
           lmjcore_result *result = NULL;
 
-          if (lmjcore_obj_get(txn, &persistent_obj, LMJCORE_MODE_LOOSE,
+          if (lmjcore_obj_get(txn, persistent_obj, LMJCORE_MODE_LOOSE,
                               result_buf, sizeof(result_buf),
                               &result) == LMJCORE_SUCCESS) {
             ctx->success_count++;
@@ -316,10 +317,10 @@ void *mixed_operations_thread(void *arg) {
           generate_random_string(member_name, sizeof(member_name));
           generate_random_string(value, sizeof(value));
 
-          if (lmjcore_obj_member_put(txn, &persistent_obj,
-                              (const uint8_t *)member_name, strlen(member_name),
-                              (const uint8_t *)value,
-                              strlen(value)) == LMJCORE_SUCCESS) {
+          if (lmjcore_obj_member_put(
+                  txn, persistent_obj, (const uint8_t *)member_name,
+                  strlen(member_name), (const uint8_t *)value,
+                  strlen(value)) == LMJCORE_SUCCESS) {
             ctx->success_count++;
           } else {
             ctx->error_count++;
@@ -365,9 +366,9 @@ void memory_leak_test() {
 
     if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn) == LMJCORE_SUCCESS) {
       if (i % 2 == 0) {
-        lmjcore_obj_create(txn, &ptr);
+        lmjcore_obj_create(txn, ptr);
       } else {
-        lmjcore_arr_create(txn, &ptr);
+        lmjcore_arr_create(txn, ptr);
       }
       lmjcore_txn_commit(txn);
     }

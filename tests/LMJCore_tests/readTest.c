@@ -3,7 +3,7 @@
 
 int main() {
   lmjcore_ptr ptr;
-  lmjcore_ptr_from_string("012971ed2dc7c346dd9b6f1d05d90b93e1", &ptr);
+  lmjcore_ptr_from_string("0192cc5c281d6f4ff7952aaa6408f76a6e", ptr);
 
   // 创建lmjcore环境变量
   lmjcore_env *env = NULL;
@@ -30,7 +30,7 @@ int main() {
 
   uint8_t result_buf[8192];
   lmjcore_result *result;
-  rc = lmjcore_obj_get(txn, &ptr, LMJCORE_MODE_LOOSE, result_buf,
+  rc = lmjcore_obj_get(txn, ptr, LMJCORE_MODE_LOOSE, result_buf,
                        sizeof(result_buf), &result);
 
   if (rc == LMJCORE_SUCCESS) {

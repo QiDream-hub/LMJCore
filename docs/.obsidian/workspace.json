@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "core/LMJCore.md",
+                "file": "LMJCore Toolkit/LMJCore Toolkit CONFIG Object.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "LMJCore"
+              "title": "LMJCore Toolkit CONFIG Object"
             }
           }
         ]
@@ -171,13 +171,14 @@
   },
   "active": "ec70e0ccccbf95db",
   "lastOpenFiles": [
-    "core/LMJCore 核心设计定义.md",
-    "core/LMJCore 实现细则与集成指南.md",
-    "core/LMJCore 事务.md",
+    "LMJCore Toolkit/LMJCore Toolkit ROOT Object.md",
+    "LMJCore Toolkit/LMJCore Toolkit CONFIG Object.md",
     "core/LMJCore 愿景文档.md",
-    "core/LMJCore 内核使用流程图.md",
+    "core/LMJCore 事务.md",
+    "core/LMJCore 实现细则与集成指南.md",
     "core/LMJCore 框架扩展：指针关系管理规范.md",
-    "core/LMJCore.md",
-    "LMJCore Toolkit/LMJCore Toolkit ROOT Object.md"
+    "core/LMJCore 内核使用流程图.md",
+    "core/LMJCore 核心设计定义.md",
+    "core/LMJCore.md"
   ]
 }

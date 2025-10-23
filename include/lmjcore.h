@@ -74,10 +74,8 @@ typedef enum {
   LMJCORE_AUDITERR_MISSING_VALUE = -3 // 缺失值：在arr库中注册但未在main库赋值
 } lmjcore_audit_error_code;
 
-// 17字节指针结构
-typedef struct {
-  uint8_t data[17];
-} lmjcore_ptr;
+// 指针
+typedef uint8_t lmjcore_ptr[LMJCORE_PTR_LEN];
 
 // 事务句柄（不透明类型）
 typedef struct lmjcore_txn lmjcore_txn;
@@ -208,7 +206,28 @@ int lmjcore_txn_abort(lmjcore_txn *txn);
  * @param ptr_out 返回对象指针
  * @return int
  */
-int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr *ptr_out);
+int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
+/**
+ * @brief 注册指定指针的对象（如果不存在则创建）
+ * 
+ * 注意:此函数绕过了指针生成这是高危的,请谨慎使用
+ *
+ * 此函数用于显式声明一个对象指针的有效性。如果该指针在arr数据库中不存在对应条目，
+ * 则创建空对象；如果已存在，则验证其有效性。
+ *
+ * 典型应用场景：
+ * - 系统根对象的固定化（如配置根、用户根等）
+ * - 迁移场景中重新声明已知指针
+ * - 测试环境中构造特定指针的对象
+ *
+ * @param txn 写事务
+ * @param ptr 要注册的对象指针（17字节）
+ * @return int 
+ *   - LMJCORE_SUCCESS: 注册成功
+ *   - LMJCORE_ERROR_INVALID_POINTER: 指针格式错误
+ *   - 其他LMDB相关错误码
+ */
+int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr);
 /**
  * @brief 获取整个对象
  *
@@ -230,7 +249,7 @@ int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr *ptr_out);
  * | name & value data      | 数据从后向前增长
  * +------------------------+ ← result_buf + result_buf_size
  */
-int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                     lmjcore_query_mode mode, uint8_t *result_buf,
                     size_t result_buf_size, lmjcore_result **result_head);
 /**
@@ -246,7 +265,7 @@ int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @param obj_ptr 对象指针
  * @return int 错误码
  */
-int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr);
+int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr);
 /**
  * @brief 获取一个对象成员的值
  *
@@ -259,7 +278,7 @@ int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr);
  * @param value_size 成员大小
  * @return int
  */
-int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                            const uint8_t *member_name, size_t member_name_len,
                            uint8_t *value_buf, size_t value_buf_size,
                            size_t *value_size);
@@ -274,7 +293,7 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @param value_len 值的长度
  * @return int
  */
-int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                            const uint8_t *member_name, size_t member_name_len,
                            const uint8_t *value, size_t value_len);
 
@@ -295,7 +314,7 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @param member_name_len 成员名称长度
  * @return int 错误码
  */
-int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                                 const uint8_t *member_name,
                                 size_t member_name_len);
 /**
@@ -310,7 +329,7 @@ int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @param member_name_len 成员名称长度
  * @return int 错误码
  */
-int lmjcore_obj_member_value_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_obj_member_value_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                                  const uint8_t *member_name,
                                  size_t member_name_len);
 /**
@@ -325,7 +344,7 @@ int lmjcore_obj_member_value_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @param member_name_len 成员名称长度
  * @return int 错误码
  */
-int lmjcore_obj_member_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_obj_member_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                            const uint8_t *member_name, size_t member_name_len);
 
 // 对象工具函数
@@ -338,7 +357,7 @@ int lmjcore_obj_member_del(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @param total_value_count_out 值的总个数
  * @return int
  */
-int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                             size_t *total_value_len_out,
                             size_t *total_value_count_out);
 
@@ -350,7 +369,7 @@ int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * @param ptr_out 输出数组指针
  * @return int
  */
-int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr *ptr_out);
+int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
 /**
  * @brief 添加一个元素(不验证是否存在)
  *
@@ -360,7 +379,7 @@ int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr *ptr_out);
  * @param value_len 元素长度
  * @return int
  */
-int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
+int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
                        const uint8_t *value, size_t value_len);
 /**
  * @brief 获取整个数组
@@ -383,7 +402,7 @@ int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
  * | value data             | 数据从后向前增长
  * +------------------------+ ← result_buf + result_buf_size
  */
-int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
+int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
                     lmjcore_query_mode mode, uint8_t *result_buf,
                     size_t result_buf_size, lmjcore_result **result_head);
 /**
@@ -397,7 +416,7 @@ int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
  * @param arr_ptr 数组指针
  * @return int 错误码
  */
-int lmjcore_arr_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr);
+int lmjcore_arr_del(lmjcore_txn *txn, const lmjcore_ptr arr_ptr);
 /**
  * @brief 删除数组中的元素
  * 
@@ -407,7 +426,7 @@ int lmjcore_arr_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr);
  * @param element_len 元素长度
  * @return int 
  */
-int lmjcore_arr_element_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
+int lmjcore_arr_element_del(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
                             const uint8_t *element, size_t element_len);
 // 数组工具函数
 /**
@@ -419,7 +438,7 @@ int lmjcore_arr_element_del(lmjcore_txn *txn, const lmjcore_ptr *arr_ptr,
  * @param element_count_out 元素数量
  * @return int
  */
-int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr *ptr,
+int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr ptr,
                              size_t *total_value_len_out,
                              size_t *element_count_out);
 
@@ -432,7 +451,7 @@ int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr *ptr,
  * @param buf_size 缓冲区大小
  * @return int
  */
-int lmjcore_ptr_to_string(const lmjcore_ptr *ptr, char *str_buf,
+int lmjcore_ptr_to_string(const lmjcore_ptr ptr, char *str_buf,
                           size_t buf_size);
 /**
  * @brief 字符串转lmjcore指针
@@ -441,7 +460,7 @@ int lmjcore_ptr_to_string(const lmjcore_ptr *ptr, char *str_buf,
  * @param ptr_out 指针输出
  * @return int
  */
-int lmjcore_ptr_from_string(const char *str, lmjcore_ptr *ptr_out);
+int lmjcore_ptr_from_string(const char *str, lmjcore_ptr ptr_out);
 
 // 存在性检查
 /**
@@ -451,7 +470,7 @@ int lmjcore_ptr_from_string(const char *str, lmjcore_ptr *ptr_out);
  * @param ptr 指针
  * @return int
  */
-int lmjcore_entity_exist(lmjcore_txn *txn, const lmjcore_ptr *ptr);
+int lmjcore_entity_exist(lmjcore_txn *txn, const lmjcore_ptr ptr);
 /**
  * @brief 对象成员值探针(检查对象成员的值是否存在)
  *
@@ -461,7 +480,7 @@ int lmjcore_entity_exist(lmjcore_txn *txn, const lmjcore_ptr *ptr);
  * @param member_name_len 成语名长度
  * @return int
  */
-int lmjcore_obj_member_value_exist(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_obj_member_value_exist(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                                    const uint8_t *member_name,
                                    size_t member_name_len);
 
@@ -487,7 +506,7 @@ int lmjcore_obj_member_value_exist(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
  * | member_name        | <-- 由后往前
  * ---------------------- <-- data_offset(report_buf_size)
  */
-int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
+int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                          uint8_t *report_buf, size_t report_buf_size,
                          lmjcore_audit_report **report_head);
 /**
@@ -503,6 +522,25 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr *obj_ptr,
 int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
                           size_t report_buf_size, lmjcore_audit_report *report);
 
+// 其他工具
+/**
+ * @brief 用于判断事务的类型
+ * 
+ * @param txn 事务
+ * @param type 事务类型
+ * @return true 
+ * @return false 
+ */
+bool is_txn_type(lmjcore_txn *txn,lmjcore_txn_type type);
+/**
+ * @brief 用于判读实体类型
+ * 
+ * @param ptr 实体指针
+ * @param type 实体类型
+ * @return true 
+ * @return false 
+ */
+bool is_entity_type(lmjcore_ptr ptr,lmjcore_entity_type type);
 #ifdef __cplusplus
 }
 #endif

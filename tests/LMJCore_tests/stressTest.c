@@ -14,8 +14,7 @@
 #define MAX_MEMBER_NAME_LEN 50
 #define MAX_VALUE_LEN 100
 
-#define ENV_OP                                                                 \
-  LMJCORE_WRITEMAP | LMJCORE_NOSYNC | LMJCORE_NOMETASYNC | LMJCORE_MAPASYNC
+#define ENV_OP LMJCORE_FLAGS_MAX_PERF
 
 // 时间戳缓冲区大小
 #define TIMESTAMP_BUFFER_SIZE 64

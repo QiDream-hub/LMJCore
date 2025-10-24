@@ -29,25 +29,25 @@ extern "C" {
  */
 
 // 文件操作相关标志
-#define LMJCORE_FIXEDMAP    MDB_FIXEDMAP    // 使用固定内存映射
-#define LMJCORE_NOSUBDIR    MDB_NOSUBDIR    // 环境文件直接放在路径中，不创建子目录
-#define LMJCORE_NOSYNC      MDB_NOSYNC      // 不强制将数据同步到磁盘（写入后立即返回）
-#define LMJCORE_RDONLY      MDB_RDONLY      // 以只读模式打开环境
-#define LMJCORE_NOMETASYNC  MDB_NOMETASYNC  // 不强制在提交后同步元数据
-#define LMJCORE_WRITEMAP    MDB_WRITEMAP    // 使用写时内存映射（提升写入性能）
-#define LMJCORE_MAPASYNC    MDB_MAPASYNC    // 在同步模式下使用异步回写
-#define LMJCORE_NOTLS       MDB_NOTLS       // 禁用线程局部存储
+#define LMJCORE_FLAGS_FIXEDMAP    MDB_FIXEDMAP    // 使用固定内存映射
+#define LMJCORE_FLAGS_NOSUBDIR    MDB_NOSUBDIR    // 环境文件直接放在路径中，不创建子目录
+#define LMJCORE_FLAGS_NOSYNC      MDB_NOSYNC      // 不强制将数据同步到磁盘（写入后立即返回）
+#define LMJCORE_FLAGS_RDONLY      MDB_RDONLY      // 以只读模式打开环境
+#define LMJCORE_FLAGS_NOMETASYNC  MDB_NOMETASYNC  // 不强制在提交后同步元数据
+#define LMJCORE_FLAGS_WRITEMAP    MDB_WRITEMAP    // 使用写时内存映射（提升写入性能）
+#define LMJCORE_FLAGS_MAPASYNC    MDB_MAPASYNC    // 在同步模式下使用异步回写
+#define LMJCORE_FLAGS_NOTLS       MDB_NOTLS       // 禁用线程局部存储
 
 // 数据库操作相关标志
-#define LMJCORE_NOLOCK      MDB_NOLOCK      // 不使用任何锁（实验性）
-#define LMJCORE_NORDAHEAD   MDB_NORDAHEAD   // 禁用预读
-#define LMJCORE_NOMEMINIT   MDB_NOMEMINIT   // 不初始化内存（提升性能，但有安全风险）
+#define LMJCORE_FLAGS_NOLOCK      MDB_NOLOCK      // 不使用任何锁（实验性）
+#define LMJCORE_FLAGS_NORDAHEAD   MDB_NORDAHEAD   // 禁用预读
+#define LMJCORE_FLAGS_NOMEMINIT   MDB_NOMEMINIT   // 不初始化内存（提升性能，但有安全风险）
 
 // 组合标志（常用配置模式）
-#define LMJCORE_SAFE_SYNC       0                                     // 安全同步模式（默认）
-#define LMJCORE_MAX_PERF        (LMJCORE_WRITEMAP | LMJCORE_MAPASYNC) // 最大性能模式
-#define LMJCORE_READONLY_MODE   LMJCORE_RDONLY                        // 只读模式
-#define LMJCORE_NO_DISK_SYNC    (LMJCORE_NOSYNC | LMJCORE_NOMETASYNC) // 无磁盘同步模式
+#define LMJCORE_FLAGS_SAFE_SYNC       0                                     // 安全同步模式（默认）
+#define LMJCORE_FLAGS_MAX_PERF        (LMJCORE_FLAGS_WRITEMAP | LMJCORE_FLAGS_MAPASYNC) // 最大性能模式
+#define LMJCORE_FLAGS_READONLY_MODE   LMJCORE_FLAGS_RDONLY                        // 只读模式
+#define LMJCORE_FLAGS_NO_DISK_SYNC    (LMJCORE_FLAGS_NOSYNC | LMJCORE_FLAGS_NOMETASYNC) // 无磁盘同步模式
 
 // 兼容性标志（不同版本的 LMDB）
 #ifdef MDB_PREVSNAPSHOT
@@ -57,10 +57,12 @@ extern "C" {
 // 固定容量的错误报告上限
 #define LMJCORE_MAX_READ_ERRORS 8
 
+// key总长度
+#define LMJCORE_MAX_KEY_LEN 511
 // 指针长度（字节）
 #define LMJCORE_PTR_LEN 17
 // 成员名最大长度（基于 LMDB 键长限制计算）
-#define LMJCORE_MAX_MEMBER_NAME_LEN 511 - LMJCORE_PTR_LEN - 1
+#define LMJCORE_MAX_MEMBER_NAME_LEN LMJCORE_MAX_KEY_LEN - LMJCORE_PTR_LEN - 1
 
 // 实体类型枚举
 typedef enum {
@@ -117,24 +119,15 @@ typedef struct {
   lmjcore_read_error_code code;
   union {
     struct {
-      uint16_t member_offset; // 成员名在缓冲区中的偏移量
-      uint16_t member_len;    // 成员名长度
-    } member;
-    struct {
-      uint32_t index; // 数组索引
-    } array;
+      uint16_t element_offset; // 成员名或数组元素在缓冲区中的偏移量
+      uint16_t element_len;    // 成员名或数组元素长度
+    } element;
     struct {
       int code;
     } error_code;
   } context;
   lmjcore_ptr entity_ptr; // 发生错误的实体指针
 } lmjcore_read_error;
-
-// 读取错误报告结构
-typedef struct {
-  lmjcore_read_error errors[LMJCORE_MAX_READ_ERRORS];
-  uint8_t count;
-} lmjcore_error_report;
 
 // 对象成员描述符（基于偏移量定位）
 typedef struct {

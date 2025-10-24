@@ -163,8 +163,8 @@ static bool add_error_to_result(lmjcore_result *result,
 
   switch (code) {
   case LMJCORE_READERR_MEMBER_MISSING:
-    error->context.member.member_offset = member_offset;
-    error->context.member.member_len = member_len;
+    error->context.element.element_offset = member_offset;
+    error->context.element.element_len = member_len;
     break;
   case LMJCORE_READERR_BUFFER_TOO_SMALL:
   case LMJCORE_READERR_LMDB_FAILED:

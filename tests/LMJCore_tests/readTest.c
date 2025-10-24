@@ -10,11 +10,7 @@ int main() {
   lmjcore_txn *txn = NULL;
 
   // 初始化环境
-  int rc = lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100,
-                        LMJCORE_WRITEMAP |       // 写内存映射
-                            LMJCORE_NOSYNC |     // 不同步元数据
-                            LMJCORE_NOMETASYNC | // 不同步数据
-                            LMJCORE_MAPASYNC,
+  int rc = lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100, LMJCORE_FLAGS_MAX_PERF,
                         NULL, NULL, &env);
   if (rc != LMJCORE_SUCCESS) {
     printf("初始化失败: %d\n", rc);

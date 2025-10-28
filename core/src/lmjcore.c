@@ -839,8 +839,8 @@ int lmjcore_obj_member_value_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                            const uint8_t *member_name, size_t member_name_len,
                            uint8_t *value_buf, size_t value_buf_size,
-                           size_t *value_size) {
-  if (!txn || !obj_ptr || !member_name || !value_size ||
+                           size_t *value_size_out) {
+  if (!txn || !obj_ptr || !member_name || !value_size_out ||
       obj_ptr[0] != LMJCORE_OBJ) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
@@ -857,7 +857,7 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   }
 
   // 初始化
-  *value_size = 0;
+  *value_size_out = 0;
 
   // 拼接完整的key
   uint8_t *t_key = malloc(LMJCORE_PTR_LEN + member_name_len);
@@ -890,7 +890,7 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 
   // 将值复制到缓冲区
   memcpy(value_buf, value.mv_data, value.mv_size);
-  *value_size = value.mv_size;
+  *value_size_out = value.mv_size;
 
   return LMJCORE_SUCCESS;
 }
@@ -1548,8 +1548,4 @@ int lmjcore_ptr_from_string(const char *str, lmjcore_ptr ptr_out) {
 // 其他工具
 bool is_txn_type(lmjcore_txn *txn, lmjcore_txn_type type) {
   return txn->type == type;
-}
-
-bool is_entity_type(lmjcore_ptr ptr, lmjcore_entity_type type) {
-  return ptr[0] == type;
 }

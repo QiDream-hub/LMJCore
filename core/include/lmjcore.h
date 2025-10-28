@@ -299,13 +299,13 @@ int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr);
  * @param member_name_len 成员名称长度
  * @param value_buf 输出缓冲区，用于接收成员值
  * @param value_buf_size 输出缓冲区大小
- * @param value_size 输出参数，返回实际值的长度
+ * @param value_size_out 输出参数，返回实际值的长度
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                            const uint8_t *member_name, size_t member_name_len,
                            uint8_t *value_buf, size_t value_buf_size,
-                           size_t *value_size);
+                           size_t *value_size_out);
 
 /**
  * @brief 设置或更新对象成员的值
@@ -585,16 +585,6 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
  * @return false 事务类型不匹配或句柄无效
  */
 bool is_txn_type(lmjcore_txn *txn, lmjcore_txn_type type);
-
-/**
- * @brief 判断实体指针的类型
- *
- * @param ptr 实体指针
- * @param type 待比较的实体类型
- * @return true 实体类型匹配
- * @return false 实体类型不匹配或指针无效
- */
-bool is_entity_type(lmjcore_ptr ptr, lmjcore_entity_type type);
 
 #ifdef __cplusplus
 }

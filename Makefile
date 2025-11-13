@@ -23,6 +23,8 @@ core:
 toolkit: core
 	@echo "Building config toolkit..."
 	$(MAKE) -C Toolkit/config_obj_toolkit
+	@echo "Building result parser..."
+	$(MAKE) -C Toolkit/result_parser
 
 # 构建测试程序（依赖核心库和工具包）
 .PHONY: tests

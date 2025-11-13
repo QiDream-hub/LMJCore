@@ -18,7 +18,7 @@ const c = @cImport({
 // MEMBER_NOT_FOUND = c.LMJCORE_ERROR_MEMBER_NOT_FOUND, // 成员值不存在(缺失值)
 // };
 
-const lmjcore = struct {
+pub const lmjcore = struct {
     pub const EntityType = enum(u8) {
         Object = c.LMJCORE_OBJ,
         Array = c.LMJCORE_ARR,

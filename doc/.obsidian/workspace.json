@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "8009554a4eb2438f",
+        "id": "547bfa660559e04f",
         "type": "tabs",
         "children": [
           {
-            "id": "ec70e0ccccbf95db",
+            "id": "43530db5a1fa0070",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "LMJCore Toolkit/LMJCore Toolkit Result Parser.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "LMJCore Toolkit Result Parser"
+              "title": "新标签页"
             }
           }
         ]
@@ -169,17 +165,18 @@
       "bases:创建新数据库": false
     }
   },
-  "active": "ec70e0ccccbf95db",
+  "active": "43530db5a1fa0070",
   "lastOpenFiles": [
-    "LMJCore Toolkit/LMJCore Toolkit CONFIG Object.md",
-    "LMJCore Toolkit/LMJCore Toolkit Result Parser.md",
-    "core/LMJCore 实现细则与集成指南.md",
-    "LMJCore Toolkit/LMJCore Toolkit ROOT Object.md",
+    "Pasted image 20251118002305.png",
+    "core/LMJCore 核心设计定义.md",
     "core/LMJCore 框架扩展：指针关系管理规范.md",
+    "core/LMJCore 实现细则与集成指南.md",
+    "core/LMJCore.md",
+    "LMJCore Toolkit/LMJCore Toolkit Result Parser.md",
+    "LMJCore Toolkit/LMJCore Toolkit CONFIG Object.md",
+    "LMJCore Toolkit/LMJCore Toolkit ROOT Object.md",
     "core/LMJCore 愿景文档.md",
     "core/LMJCore 事务.md",
-    "core/LMJCore 内核使用流程图.md",
-    "core/LMJCore 核心设计定义.md",
-    "core/LMJCore.md"
+    "core/LMJCore 内核使用流程图.md"
   ]
 }

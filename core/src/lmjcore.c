@@ -9,7 +9,6 @@
 #include <string.h>
 #include <sys/types.h>
 #include <time.h>
-#include <uuid/uuid.h>
 
 #define MAIN_DB_NAME "main"
 #define ARR_DB_NAME "arr"
@@ -57,7 +56,6 @@ typedef struct MDB_val_list {
  * 8.add_lmdb_error
  * 9.add_member_missing_error
  * 10.add_audit
- * 11.default_ptr_generator
  *==========================================
  */
 
@@ -263,20 +261,6 @@ static int add_audit(lmjcore_audit_report *report, uint8_t *buf,
   return LMJCORE_SUCCESS;
 }
 
-// 默认指针生成器 (UUIDv4)
-static int default_ptr_generator(void *ctx, uint8_t out[LMJCORE_PTR_LEN]) {
-  (void)ctx;
-  uuid_t uuid;
-  uuid_generate(uuid);
-
-  // 设置类型前缀为对象类型（上层可覆盖）
-  out[0] = LMJCORE_OBJ;
-
-  // 复制UUID到后16字节
-  memcpy(out + 1, uuid, 16);
-  return LMJCORE_SUCCESS;
-}
-
 /*
  *==========================================
  * 初始化环境与清理
@@ -288,7 +272,7 @@ static int default_ptr_generator(void *ctx, uint8_t out[LMJCORE_PTR_LEN]) {
 int lmjcore_init(const char *path, size_t map_size, unsigned int flags,
                  lmjcore_ptr_generator_fn ptr_gen, void *ptr_gen_ctx,
                  lmjcore_env **env) {
-  if (!path || !env) {
+  if (!path || !env || !ptr_gen) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
 
@@ -298,13 +282,8 @@ int lmjcore_init(const char *path, size_t map_size, unsigned int flags,
   }
 
   // 设置指针生成器
-  if (ptr_gen) {
-    new_env->ptr_generator = ptr_gen;
-    new_env->ptr_gen_ctx = ptr_gen_ctx;
-  } else {
-    new_env->ptr_generator = default_ptr_generator;
-    new_env->ptr_gen_ctx = NULL;
-  }
+  new_env->ptr_generator = ptr_gen;
+  new_env->ptr_gen_ctx = ptr_gen_ctx;
 
   // 初始化 LMDB 环境
   int rc = mdb_env_create(&new_env->mdb_env);

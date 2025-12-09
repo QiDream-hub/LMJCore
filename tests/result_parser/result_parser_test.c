@@ -6,7 +6,7 @@
 #include <string.h>
 
 // 测试配置
-#define TEST_DB_PATH "./test_db"
+#define TEST_DB_PATH "./lmjcore_db/test_db"
 #define TEST_MAP_SIZE (1024 * 1024) // 1MB
 
 // 测试辅助函数

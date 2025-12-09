@@ -1,4 +1,5 @@
 #include "../../core/include/lmjcore.h"
+#include "../../Toolkit/ptr_uuid_gen/include/lmjcore_uuid_gen.h"
 #include <stdio.h>
 
 int main() {
@@ -11,7 +12,7 @@ int main() {
 
   // 初始化环境
   int rc = lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100, LMJCORE_FLAGS_MAX_PERF,
-                        NULL, NULL, &env);
+                        lmjcore_uuidv4_ptr_gen, NULL, &env);
   if (rc != LMJCORE_SUCCESS) {
     printf("初始化失败: %d\n", rc);
     return 1;

@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "547bfa660559e04f",
+        "id": "9371851a332ec500",
         "type": "tabs",
         "children": [
           {
-            "id": "43530db5a1fa0070",
+            "id": "762efb87bad79cbc",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "core/LMJCore 愿景文档.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "新标签页"
+              "title": "LMJCore 愿景文档"
             }
           }
         ]
@@ -165,18 +169,18 @@
       "bases:创建新数据库": false
     }
   },
-  "active": "43530db5a1fa0070",
+  "active": "762efb87bad79cbc",
   "lastOpenFiles": [
-    "Pasted image 20251118002305.png",
     "core/LMJCore 核心设计定义.md",
+    "core/LMJCore 内核使用流程图.md",
+    "core/LMJCore.md",
     "core/LMJCore 框架扩展：指针关系管理规范.md",
     "core/LMJCore 实现细则与集成指南.md",
-    "core/LMJCore.md",
+    "Pasted image 20251118002305.png",
     "LMJCore Toolkit/LMJCore Toolkit Result Parser.md",
     "LMJCore Toolkit/LMJCore Toolkit CONFIG Object.md",
     "LMJCore Toolkit/LMJCore Toolkit ROOT Object.md",
     "core/LMJCore 愿景文档.md",
-    "core/LMJCore 事务.md",
-    "core/LMJCore 内核使用流程图.md"
+    "core/LMJCore 事务.md"
   ]
 }

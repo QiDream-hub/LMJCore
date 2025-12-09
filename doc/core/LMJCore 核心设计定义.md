@@ -54,6 +54,7 @@ typedef int (*lmjcore_ptr_generator_fn)(void *ctx, uint8_t out[LMJCORE_PTR_LEN])
 - **`out[0]` 必须** 设置为有效的 `lmjcore_entity_type` 枚举值
 - 生成器负责填充剩余 `LMJCORE_PTR_LEN - 1` 字节的语义
 - 应保证指针在实例范围内的唯一性
+- `gen` 参数不得为 `NULL`；内核将拒绝初始化并返回错误。
 
 ---
 

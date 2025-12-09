@@ -8,7 +8,7 @@ RESULT_PARSER_DIR ?= ../Toolkit/result_parser
 CFLAGS += -I$(CORE_DIR)/include -I$(CONFIG_TOOLKIT_DIR)/include -I$(RESULT_PARSER_DIR)/include
 
 # 基础链接标志
-BASE_LDFLAGS = -L$(BUILD_DIR) -Wl,-rpath,$(BUILD_DIR) -llmdb -luuid
+BASE_LDFLAGS = -L$(BUILD_DIR) -Wl,-rpath,$(BUILD_DIR) -llmdb -llmjuuidgen
 
 # 测试程序
 CONFIG_TEST_SRC = lmjcore_config_obj_test/config_obj_test.c

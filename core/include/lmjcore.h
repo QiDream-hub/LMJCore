@@ -200,7 +200,7 @@ int lmjcore_cleanup(lmjcore_env *env);
  * @brief 开启一个新事务
  *
  * @param env 已初始化的环境句柄
- * @param type 事务类型（只读或读写）
+ * @param type 事务类型（只读或删写改）
  * @param txn 输出参数，返回创建的事务句柄
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */

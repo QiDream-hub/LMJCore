@@ -1,4 +1,5 @@
 #include "../../core/include/lmjcore.h"
+#include "../../Toolkit/ptr_uuid_gen/include/lmjcore_uuid_gen.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,8 +11,8 @@ int main() {
   lmjcore_txn *txn = NULL;
 
   // 初始化环境
-  int rc =
-      lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100, 0, NULL, NULL, &env);
+  int rc = lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100, 0,
+                        lmjcore_uuidv4_ptr_gen, NULL, &env);
   if (rc != LMJCORE_SUCCESS) {
     printf("初始化失败: %d\n", rc);
     return 1;
@@ -60,10 +61,10 @@ int main() {
   const char *name = "John Doe";
   const char *email = "john@example.com";
 
-  rc = lmjcore_obj_member_put(txn, obj_ptr, (uint8_t *)"name", 4, (uint8_t *)name,
-                       strlen(name));
-  rc = lmjcore_obj_member_put(txn, obj_ptr, (uint8_t *)"email", 5, (uint8_t *)email,
-                       strlen(email));
+  rc = lmjcore_obj_member_put(txn, obj_ptr, (uint8_t *)"name", 4,
+                              (uint8_t *)name, strlen(name));
+  rc = lmjcore_obj_member_put(txn, obj_ptr, (uint8_t *)"email", 5,
+                              (uint8_t *)email, strlen(email));
 
   // 提交事务
   rc = lmjcore_txn_commit(txn);

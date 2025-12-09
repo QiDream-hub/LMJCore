@@ -4,11 +4,11 @@
 ```mermaid
 flowchart TD
     A[上层应用启动] --> B[调用 lmjcore_init]
-    B --> C{判断是否传递<br>指针生成方法?}
-    C -->|否| D[将使用默认<br>指针生成函数]
-    C -->|是| E[使用传递的<br>指针生成函数]
+    B --> C{是否传递了<br>指针生成函数?}
+    C -->|是| D[使用传递的<br>指针生成函数]
+    C -->|否| E[初始化失败：<br>必须提供生成器]
     D --> F[初始化成功]
-    E --> F
+    E --> G[返回 LMJCORE_ERROR_INVALID_PARAM]
 ```
 
 ---

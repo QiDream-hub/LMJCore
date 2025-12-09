@@ -1,4 +1,5 @@
 #include "../../core/include/lmjcore.h"
+#include "../../Toolkit/ptr_uuid_gen/include/lmjcore_uuid_gen.h"
 #include <assert.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -351,7 +352,7 @@ void memory_leak_test() {
   lmjcore_env *env = NULL;
 
   // 初始化环境
-  if (lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 100, ENV_OP, NULL, NULL, &env) !=
+  if (lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 100, ENV_OP, lmjcore_uuidv4_ptr_gen, NULL, &env) !=
       LMJCORE_SUCCESS) {
     print_with_timestamp(
         "Failed to initialize environment for memory leak test\n");
@@ -400,7 +401,7 @@ int main() {
 
   // 初始化LMJCore环境
   int ret =
-      lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 500, ENV_OP, NULL, NULL, &env);
+      lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 500, ENV_OP, lmjcore_uuidv4_ptr_gen, NULL, &env);
   if (ret != LMJCORE_SUCCESS) {
     print_with_timestamp("Failed to initialize LMJCore: %d\n", ret);
     return 1;

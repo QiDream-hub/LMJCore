@@ -5,7 +5,7 @@ export BUILD_DIR = $(CURDIR)/build
 export INSTALL_DIR = $(CURDIR)/bin
 export CC = gcc
 export CFLAGS = -Wall -Wextra -g -I$(CURDIR)/core/include -I$(CURDIR)/Toolkit/config_obj_toolkit/include
-export LDFLAGS = -llmdb -luuid
+export LDFLAGS = -llmdb
 export LD_LIBRARY_PATH = $(BUILD_DIR)
 
 # 默认目标
@@ -25,6 +25,8 @@ toolkit: core
 	$(MAKE) -C Toolkit/config_obj_toolkit
 	@echo "Building result parser..."
 	$(MAKE) -C Toolkit/result_parser
+	@echo "Building ptr gender..."
+	$(MAKE) -C Toolkit/ptr_uuid_gen
 
 # 构建测试程序（依赖核心库和工具包）
 .PHONY: tests

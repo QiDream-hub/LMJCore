@@ -16,13 +16,16 @@ RESULT_PARSER_TEST_SRC = result_parser/result_parser_test.c
 CORE_TEST_SRC = LMJCore_tests/LMJCoreTest.c
 READ_TEST_SRC = LMJCore_tests/readTest.c
 STRESS_TEST_SRC = LMJCore_tests/stressTest.c
+OTHER_TEST_SRC = test/ptr_tool.c
 
 TEST_TARGETS = \
 	$(BUILD_DIR)/config_obj_test \
 	$(BUILD_DIR)/result_parser_test \
 	$(BUILD_DIR)/LMJCoreTest \
 	$(BUILD_DIR)/readTest \
-	$(BUILD_DIR)/stressTest
+	$(BUILD_DIR)/stressTest \
+	$(BUILD_DIR)/test
+
 
 # 默认目标
 .PHONY: all
@@ -39,6 +42,12 @@ $(BUILD_DIR)/result_parser_test: $(RESULT_PARSER_TEST_SRC) | $(BUILD_DIR)/liblmj
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $< $(BASE_LDFLAGS) -llmjcore -llmjresultparser
 	@echo "Built result_parser_test"
+
+# 构建结果解析器测试（依赖指针生成函数和核心库）
+$(BUILD_DIR)/test: $(OTHER_TEST_SRC) | $(BUILD_DIR)/liblmjresultparser.so
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(BASE_LDFLAGS) -llmjcore
+	@echo "Built other test"
 
 # 构建核心测试（只依赖核心库）
 $(BUILD_DIR)/LMJCoreTest: $(CORE_TEST_SRC) | $(BUILD_DIR)/liblmjcore.so

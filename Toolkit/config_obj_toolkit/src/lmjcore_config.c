@@ -80,9 +80,9 @@ int lmjcore_config_get(lmjcore_txn *txn, const uint8_t *key, size_t key_len,
                                 value_buf, value_buf_size, value_size);
 }
 
-int lmjcore_config_get_all(lmjcore_txn *txn, lmjcore_query_mode mode,
-                           uint8_t *result_buf, size_t result_buf_size,
-                           lmjcore_result **result_head) {
+int lmjcore_config_get_all(lmjcore_txn *txn, uint8_t *result_buf,
+                           size_t result_buf_size,
+                           lmjcore_result_obj **result_head) {
   if (!txn || !result_buf || !result_head) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
@@ -97,6 +97,6 @@ int lmjcore_config_get_all(lmjcore_txn *txn, lmjcore_query_mode mode,
   }
 
   // 获取完整配置对象
-  return lmjcore_obj_get(txn, LMJCORE_CONFIG_OBJECT_PTR, mode, result_buf,
+  return lmjcore_obj_get(txn, LMJCORE_CONFIG_OBJECT_PTR, result_buf,
                          result_buf_size, result_head);
 }

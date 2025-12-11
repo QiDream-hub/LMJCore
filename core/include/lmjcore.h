@@ -13,14 +13,12 @@ extern "C" {
 // 错误码定义
 #define LMJCORE_SUCCESS 0
 #define LMJCORE_ERROR_INVALID_PARAM -32000            // 参数无效
-#define LMJCORE_ERROR_MEMBER_TOO_LONG -32001          // 成员名长度超限
-#define LMJCORE_ERROR_ENTITY_NOT_FOUND -32002         // 实体不存在（无效指针）
-#define LMJCORE_ERROR_GHOST_MEMBER -32003             // 检测到幽灵成员
-#define LMJCORE_ERROR_INVALID_POINTER -32004          // 指针格式错误
-#define LMJCORE_ERROR_BUFFER_TOO_SMALL -32005         // 输出缓冲区空间不足
-#define LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED -32006 // 内存分配失败
-#define LMJCORE_ERROR_STRICT_MODE_VIOLATION -32007    // 严格模式校验失败
-#define LMJCORE_ERROR_MEMBER_NOT_FOUND -32008         // 成员值不存在(缺失值)
+#define LMJCORE_ERROR_MEMBER_TOO_LONG -32002          // 成员名长度超限
+#define LMJCORE_ERROR_INVALID_POINTER -32003          // 指针格式错误
+#define LMJCORE_ERROR_BUFFER_TOO_SMALL -32004         // 输出缓冲区空间不足
+#define LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED -32005 // 内存分配失败
+#define LMJCORE_ERROR_ENTITY_NOT_FOUND -32006         // 实体不存在
+#define LMJCORE_ERROR_MEMBER_NOT_FOUND -32007         // 成员不存在
 
 // 环境标志位（映射 LMDB 标志）
 /**
@@ -29,29 +27,34 @@ extern "C" {
  */
 
 // 文件操作相关标志
-#define LMJCORE_FLAGS_FIXEDMAP    MDB_FIXEDMAP    // 使用固定内存映射
-#define LMJCORE_FLAGS_NOSUBDIR    MDB_NOSUBDIR    // 环境文件直接放在路径中，不创建子目录
-#define LMJCORE_FLAGS_NOSYNC      MDB_NOSYNC      // 不强制将数据同步到磁盘（写入后立即返回）
-#define LMJCORE_FLAGS_RDONLY      MDB_RDONLY      // 以只读模式打开环境
-#define LMJCORE_FLAGS_NOMETASYNC  MDB_NOMETASYNC  // 不强制在提交后同步元数据
-#define LMJCORE_FLAGS_WRITEMAP    MDB_WRITEMAP    // 使用写时内存映射（提升写入性能）
-#define LMJCORE_FLAGS_MAPASYNC    MDB_MAPASYNC    // 在同步模式下使用异步回写
-#define LMJCORE_FLAGS_NOTLS       MDB_NOTLS       // 禁用线程局部存储
+#define LMJCORE_FLAGS_FIXEDMAP MDB_FIXEDMAP // 使用固定内存映射
+#define LMJCORE_FLAGS_NOSUBDIR                                                 \
+  MDB_NOSUBDIR // 环境文件直接放在路径中，不创建子目录
+#define LMJCORE_FLAGS_NOSYNC                                                   \
+  MDB_NOSYNC // 不强制将数据同步到磁盘（写入后立即返回）
+#define LMJCORE_FLAGS_RDONLY MDB_RDONLY         // 以只读模式打开环境
+#define LMJCORE_FLAGS_NOMETASYNC MDB_NOMETASYNC // 不强制在提交后同步元数据
+#define LMJCORE_FLAGS_WRITEMAP MDB_WRITEMAP // 使用写时内存映射（提升写入性能）
+#define LMJCORE_FLAGS_MAPASYNC MDB_MAPASYNC // 在同步模式下使用异步回写
+#define LMJCORE_FLAGS_NOTLS MDB_NOTLS       // 禁用线程局部存储
 
 // 数据库操作相关标志
-#define LMJCORE_FLAGS_NOLOCK      MDB_NOLOCK      // 不使用任何锁（实验性）
-#define LMJCORE_FLAGS_NORDAHEAD   MDB_NORDAHEAD   // 禁用预读
-#define LMJCORE_FLAGS_NOMEMINIT   MDB_NOMEMINIT   // 不初始化内存（提升性能，但有安全风险）
+#define LMJCORE_FLAGS_NOLOCK MDB_NOLOCK       // 不使用任何锁（实验性）
+#define LMJCORE_FLAGS_NORDAHEAD MDB_NORDAHEAD // 禁用预读
+#define LMJCORE_FLAGS_NOMEMINIT                                                \
+  MDB_NOMEMINIT // 不初始化内存（提升性能，但有安全风险）
 
 // 组合标志（常用配置模式）
-#define LMJCORE_FLAGS_SAFE_SYNC       0                                     // 安全同步模式（默认）
-#define LMJCORE_FLAGS_MAX_PERF        (LMJCORE_FLAGS_WRITEMAP | LMJCORE_FLAGS_MAPASYNC) // 最大性能模式
-#define LMJCORE_FLAGS_READONLY_MODE   LMJCORE_FLAGS_RDONLY                        // 只读模式
-#define LMJCORE_FLAGS_NO_DISK_SYNC    (LMJCORE_FLAGS_NOSYNC | LMJCORE_FLAGS_NOMETASYNC) // 无磁盘同步模式
+#define LMJCORE_FLAGS_SAFE_SYNC 0 // 安全同步模式（默认）
+#define LMJCORE_FLAGS_MAX_PERF                                                 \
+  (LMJCORE_FLAGS_WRITEMAP | LMJCORE_FLAGS_MAPASYNC)      // 最大性能模式
+#define LMJCORE_FLAGS_READONLY_MODE LMJCORE_FLAGS_RDONLY // 只读模式
+#define LMJCORE_FLAGS_NO_DISK_SYNC                                             \
+  (LMJCORE_FLAGS_NOSYNC | LMJCORE_FLAGS_NOMETASYNC) // 无磁盘同步模式
 
 // 兼容性标志（不同版本的 LMDB）
 #ifdef MDB_PREVSNAPSHOT
-#define LMJCORE_PREVSNAPSHOT    MDB_PREVSNAPSHOT  // 允许从先前快照读取
+#define LMJCORE_PREVSNAPSHOT MDB_PREVSNAPSHOT // 允许从先前快照读取
 #endif
 
 // 固定容量的错误报告上限
@@ -70,12 +73,6 @@ typedef enum {
   LMJCORE_ARR = 0x02, // 数组类型
 } lmjcore_entity_type;
 
-// 查询模式枚举
-typedef enum {
-  LMJCORE_MODE_LOOSE = 0,  // 宽松模式：缺失值自动填充
-  LMJCORE_MODE_STRICT = 1, // 严格模式：遇缺失立即报错
-} lmjcore_query_mode;
-
 // 事务类型枚举
 typedef enum {
   LMJCORE_TXN_READONLY = 0, // 只读事务
@@ -85,11 +82,8 @@ typedef enum {
 // 读取错误代码枚举
 typedef enum {
   LMJCORE_READERR_NONE = 0,
-  LMJCORE_READERR_ENTITY_NOT_FOUND = 1,     // 目标实体不存在
-  LMJCORE_READERR_MEMBER_MISSING,           // 对象成员值缺失
-  LMJCORE_READERR_BUFFER_TOO_SMALL,         // 输出缓冲区不足
-  LMJCORE_READERR_LMDB_FAILED,              // LMDB 底层操作失败
-  LMJCORE_READERR_MEMORY_ALLOCATION_FAILED, // 内存分配失败
+  LMJCORE_READERR_ENTITY_NOT_FOUND = 1, // 目标实体不存在
+  LMJCORE_READERR_MEMBER_MISSING,       // 对象成员值缺失
 } lmjcore_read_error_code;
 
 // 审计错误代码枚举
@@ -116,44 +110,44 @@ typedef int (*lmjcore_ptr_generator_fn)(void *ctx, uint8_t out[17]);
 
 // 读取错误详情结构
 typedef struct {
-  lmjcore_read_error_code code;
-  union {
-    struct {
-      uint16_t element_offset; // 成员名或数组元素在缓冲区中的偏移量
-      uint16_t element_len;    // 成员名或数组元素长度
-    } element;
-    struct {
-      int code;
-    } error_code;
-  } context;
+  lmjcore_read_error_code code; // 错误码
+  struct {
+    size_t element_offset; // 成员名或数组元素在缓冲区中的偏移量
+    size_t element_len;    // 成员名或数组元素长度
+  } element;
   lmjcore_ptr entity_ptr; // 发生错误的实体指针
 } lmjcore_read_error;
 
-// 对象成员描述符（基于偏移量定位）
+// 描述符基础展示单元(一个数组的元素,一个对象的成员名,或者成员的值)
 typedef struct {
-  uint32_t name_offset;  // 成员名在缓冲区中的偏移
-  uint16_t name_len;     // 成员名长度
-  uint32_t value_offset; // 成员值在缓冲区中的偏移
-  uint16_t value_len;    // 成员值长度
-} lmjcore_obj_descriptor;
+  size_t value_offset; // 元素值在缓冲区中的偏移
+  size_t value_len;    // 元素值长度
+} lmjcore_descriptor;
 
-// 数组元素描述符
+// 一个完整的成员
 typedef struct {
-  uint32_t value_offset; // 元素值在缓冲区中的偏移
-  uint16_t value_len;    // 元素值长度
-} lmjcore_arr_descriptor;
+  lmjcore_descriptor member_name;
+  lmjcore_descriptor member_value;
+} lmjcore_member_descriptor;
 
-// 统一查询结果结构（完全自包含于调用方提供的缓冲区）
+// 对象返回体
 typedef struct {
-  lmjcore_read_error errors[LMJCORE_MAX_READ_ERRORS]; // 错误列表
-  uint8_t error_count;                                // 错误数量
+  size_t error_count;                                 // 错误统计
+  lmjcore_read_error errors[LMJCORE_MAX_READ_ERRORS]; // 错误数组
 
-  size_t count; // 成员或元素数量
-  union {
-    lmjcore_obj_descriptor *object_descriptors; // 对象成员描述符数组
-    lmjcore_arr_descriptor *array_descriptors;  // 数组元素描述符数组
-  } descriptor;
-} lmjcore_result;
+  size_t member_count; // 成员统计
+  lmjcore_member_descriptor members[];
+
+} lmjcore_result_obj;
+
+// 数组返回体
+typedef struct {
+  size_t error_count;                                 // 错误统计
+  lmjcore_read_error errors[LMJCORE_MAX_READ_ERRORS]; // 错误数组
+
+  size_t element_count; // 元素统计
+  lmjcore_descriptor elements[];
+} lmjcore_result_arr;
 
 // 审计条目描述符
 typedef struct {
@@ -265,15 +259,14 @@ int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr);
  *
  * @param txn 有效的读事务句柄
  * @param obj_ptr 目标对象指针
- * @param mode 读取模式（宽松/严格）
  * @param result_buf 输出缓冲区
  * @param result_buf_size 输出缓冲区大小
  * @param result_head 输出参数，指向结果头部的指针
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
-                    lmjcore_query_mode mode, uint8_t *result_buf,
-                    size_t result_buf_size, lmjcore_result **result_head);
+                    uint8_t *result_buf, size_t result_buf_size,
+                    lmjcore_result_obj **result_head);
 
 /**
  * @brief 完全删除指定对象及其所有成员
@@ -414,30 +407,21 @@ int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
                        const uint8_t *value, size_t value_len);
 
 /**
- * @brief 获取指定数组的完整内容
+ * @brief 获取数组的所有元素
  *
- * 结果将写入调用方提供的缓冲区，内存布局如下：
- * +------------------------+ ← result_buf
- * | lmjcore_result         | 固定头部
- * +------------------------+
- * | descriptors[]          | 元素描述符数组（从前向后增长）
- * +------------------------+
- * | ...                    |
- * +------------------------+
- * | value data             | 元素值数据（从后向前增长）
- * +------------------------+ ← result_buf + result_buf_size
+ * 结果写入调用方提供的 result_buf 缓冲区，采用紧凑布局：
+ *  [ lmjcore_result_arr头部 | element_descriptor数组 | 元素数据（从后向前） ]
  *
- * @param txn 有效的读事务句柄
- * @param arr_ptr 目标数组指针
- * @param mode 读取模式（宽松/严格）
+ * @param txn 有效事务句柄
+ * @param arr_ptr 数组指针
  * @param result_buf 输出缓冲区
- * @param result_buf_size 输出缓冲区大小
- * @param result_head 输出参数，指向结果头部的指针
- * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ * @param result_buf_size 缓冲区大小
+ * @param result_head 输出：指向 result_buf 中 lmjcore_result_arr 结构的指针
+ * @return 错误码（LMJCORE_SUCCESS 表示成功，即使有语义错误也视为成功）
  */
 int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
-                    lmjcore_query_mode mode, uint8_t *result_buf,
-                    size_t result_buf_size, lmjcore_result **result_head);
+                    uint8_t *result_buf, size_t result_buf_size,
+                    lmjcore_result_arr **result_head);
 
 /**
  * @brief 完全删除指定数组及其所有元素

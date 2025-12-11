@@ -1,5 +1,5 @@
-#include "../../core/include/lmjcore.h"
 #include "../../Toolkit/ptr_uuid_gen/include/lmjcore_uuid_gen.h"
+#include "../../core/include/lmjcore.h"
 #include <assert.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -125,10 +125,10 @@ void *stress_test_thread(void *arg) {
       if (lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &read_txn) ==
           LMJCORE_SUCCESS) {
         uint8_t result_buf[4096];
-        lmjcore_result *result = NULL;
+        lmjcore_result_obj *result = NULL;
 
-        ret = lmjcore_obj_get(read_txn, obj_ptr, LMJCORE_MODE_LOOSE,
-                              result_buf, sizeof(result_buf), &result);
+        ret = lmjcore_obj_get(read_txn, obj_ptr, result_buf, sizeof(result_buf),
+                              &result);
         if (ret == LMJCORE_SUCCESS) {
           ctx->success_count++;
         } else {
@@ -291,11 +291,10 @@ void *mixed_operations_thread(void *arg) {
         if (lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn) ==
             LMJCORE_SUCCESS) {
           uint8_t result_buf[2048];
-          lmjcore_result *result = NULL;
+          lmjcore_result_obj *result = NULL;
 
-          if (lmjcore_obj_get(txn, persistent_obj, LMJCORE_MODE_LOOSE,
-                              result_buf, sizeof(result_buf),
-                              &result) == LMJCORE_SUCCESS) {
+          if (lmjcore_obj_get(txn, persistent_obj, result_buf,
+                              sizeof(result_buf), &result) == LMJCORE_SUCCESS) {
             ctx->success_count++;
           } else {
             ctx->error_count++;
@@ -352,8 +351,8 @@ void memory_leak_test() {
   lmjcore_env *env = NULL;
 
   // 初始化环境
-  if (lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 100, ENV_OP, lmjcore_uuidv4_ptr_gen, NULL, &env) !=
-      LMJCORE_SUCCESS) {
+  if (lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 100, ENV_OP,
+                   lmjcore_uuidv4_ptr_gen, NULL, &env) != LMJCORE_SUCCESS) {
     print_with_timestamp(
         "Failed to initialize environment for memory leak test\n");
     return;
@@ -400,8 +399,8 @@ int main() {
   thread_context contexts[NUM_THREADS];
 
   // 初始化LMJCore环境
-  int ret =
-      lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 500, ENV_OP, lmjcore_uuidv4_ptr_gen, NULL, &env);
+  int ret = lmjcore_init(TEST_DB_PATH, 1024 * 1024 * 500, ENV_OP,
+                         lmjcore_uuidv4_ptr_gen, NULL, &env);
   if (ret != LMJCORE_SUCCESS) {
     print_with_timestamp("Failed to initialize LMJCore: %d\n", ret);
     return 1;

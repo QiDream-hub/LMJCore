@@ -73,20 +73,19 @@ int main() {
   lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
 
   uint8_t result_buf[8192];
-  lmjcore_result *result;
-  rc = lmjcore_obj_get(txn, obj_ptr, LMJCORE_MODE_LOOSE, result_buf,
-                       sizeof(result_buf), &result);
+  lmjcore_result_obj *result;
+  rc = lmjcore_obj_get(txn, obj_ptr, result_buf, sizeof(result_buf), &result);
 
   if (rc == LMJCORE_SUCCESS) {
-    for (size_t i = 0; i < result->count; i++) {
-      lmjcore_obj_descriptor *desc = &result->descriptor.object_descriptors[i];
-      char *member_name = (char *)(result_buf + desc->name_offset);
-      uint8_t *value = result_buf + desc->value_offset;
+    for (size_t i = 0; i < result->member_count; i++) {
+      lmjcore_member_descriptor desc = result->members[i];
+      char *member_name = (char *)(result_buf + desc.member_name.value_offset);
+      uint8_t *value = result_buf + desc.member_value.value_offset;
 
-      printf("成员: %.*s, 值长度: %d\n", desc->name_len, member_name,
-             desc->value_len);
-      printf("%.*s : %.*s\n", desc->name_len, member_name, desc->value_len,
-             value);
+      printf("成员: %.*s, 值长度: %d\n", (int)desc.member_name.value_len,
+             member_name, (int)desc.member_name.value_len);
+      printf("%.*s : %.*s\n", (int)desc.member_name.value_len, member_name,
+             (int)desc.member_value.value_len, value);
     }
   }
 

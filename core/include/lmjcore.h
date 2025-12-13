@@ -106,7 +106,7 @@ typedef struct lmjcore_txn lmjcore_txn;
 typedef struct lmjcore_env lmjcore_env;
 
 // 指针生成器函数类型
-typedef int (*lmjcore_ptr_generator_fn)(void *ctx, uint8_t out[17]);
+typedef int (*lmjcore_ptr_generator_fn)(void *ctx, uint8_t out[LMJCORE_PTR_LEN]);
 
 // 读取错误详情结构
 typedef struct {
@@ -171,7 +171,7 @@ typedef struct {
  * @param path 数据库存储目录路径
  * @param map_size 内存映射大小（字节）
  * @param flags 环境标志位（LMJCORE_* 组合）
- * @param ptr_gen 自定义指针生成器（NULL 则使用默认 UUIDv4）
+ * @param ptr_gen 指针生成器
  * @param ptr_gen_ctx 指针生成器的上下文数据（可为 NULL）
  * @param env 输出参数，返回初始化后的环境句柄
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）

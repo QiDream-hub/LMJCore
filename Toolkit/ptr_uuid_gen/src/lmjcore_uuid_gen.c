@@ -63,7 +63,7 @@ static int generate_random_bytes(uint8_t *buf, size_t len) {
 }
 
 // 主函数：UUIDv4 生成器
-int lmjcore_uuidv4_ptr_gen(void *ctx, lmjcore_ptr out) {
+int lmjcore_uuidv4_ptr_gen(void *ctx, uint8_t out[LMJCORE_PTR_LEN]) {
   (void)ctx;
   if (!out) {
     return LMJCORE_ERROR_INVALID_PARAM;

@@ -116,9 +116,9 @@ pub const EntityType = enum(u8) {
     arr = c.LMJCORE_ARR,
 };
 
-pub const TxnType = enum(c.lmjcore_txn_type) {
-    readonly = c.LMJCORE_TXN_READONLY,
-    write = c.LMJCORE_TXN_WRITE,
+pub const TxnType = enum {
+    readonly,
+    write,
 };
 
 pub const ReadErrorCode = enum(c.lmjcore_read_error_code) {
@@ -282,7 +282,10 @@ pub fn cleanup(env: *Env) !void {
 }
 
 pub fn txnBegin(env: *Env, typ: TxnType) !*Txn {
-    const c_type = @intFromEnum(typ);
+    const c_type = switch (typ) {
+        .readonly => c.LMJCORE_TXN_READONLY,
+        .write => c.LMJCORE_TXN_WRITE,
+    };
     var txn: ?*c.lmjcore_txn = undefined;
     const rc = c.lmjcore_txn_begin(@as(*c.lmjcore_env, @ptrCast(env)), c_type, &txn);
     try throw(rc);

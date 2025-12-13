@@ -27,7 +27,7 @@ typedef struct {
  *   - LMJCORE_ERROR_INVALID_PARAM: ctx 无效或类型非法
  *   - LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED: 随机数生成失败（如 /dev/urandom 打不开）
  */
-int lmjcore_uuidv4_ptr_gen(void *ctx, lmjcore_ptr out);
+int lmjcore_uuidv4_ptr_gen(void *ctx, uint8_t out[LMJCORE_PTR_LEN]);
 
 #ifdef __cplusplus
 }

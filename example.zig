@@ -51,6 +51,8 @@ pub fn main() !void {
     const result_obj = read_result.result;
     const buffer = read_result.buffer;
 
+    result_obj.debugPrint(buffer);
+
     defer {
         // 清理缓冲区
         allocator.free(buffer);

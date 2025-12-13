@@ -44,6 +44,9 @@ pub const Error = error{
     MDB_BAD_VALSIZE,
     MDB_BAD_DBI,
     MDB_UNKNOWN_ERROR,
+
+    // Zig 层错误
+    UnexpectedNull,
 };
 
 // LMJCore 错误码映射
@@ -68,7 +71,7 @@ pub fn throw(rc: c_int) Error!void {
     try lmdbThrow(rc);
 }
 
-// LMDB 错误转换（复用你提供的逻辑）
+// LMDB 错误转换
 fn lmdbThrow(rc: c_int) Error!void {
     try switch (rc) {
         c.MDB_SUCCESS => {},
@@ -137,20 +140,34 @@ pub const AuditErrorCode = enum(c.lmjcore_audit_error_code) {
 pub const Env = opaque {};
 pub const Txn = opaque {};
 
-// === 描述符结构（Zig 版本）===
+// === 描述符结构（与C内存布局完全一致）===
 pub const Descriptor = extern struct {
     value_offset: usize,
     value_len: usize,
 
-    // 辅助方法：从 buffer 中提取值切片
+    // 从buffer中提取值切片（自动处理偏移量）
     pub fn getValue(self: *const Descriptor, buffer: []const u8) []const u8 {
-        return buffer[self.value_offset .. self.value_offset + self.value_len];
+        const start = self.value_offset;
+        const end = start + self.value_len;
+        // 确保偏移量在buffer范围内
+        std.debug.assert(end <= buffer.len);
+        return buffer[start..end];
     }
 };
 
 pub const MemberDescriptor = extern struct {
     member_name: Descriptor,
     member_value: Descriptor,
+
+    // 从buffer中获取成员名
+    pub fn getName(self: *const MemberDescriptor, buffer: []const u8) []const u8 {
+        return self.member_name.getValue(buffer);
+    }
+
+    // 从buffer中获取成员值
+    pub fn getValue(self: *const MemberDescriptor, buffer: []const u8) []const u8 {
+        return self.member_value.getValue(buffer);
+    }
 };
 
 pub const ReadError = extern struct {
@@ -167,8 +184,96 @@ pub const AuditDescriptor = extern struct {
     member_offset: usize,
     member_len: u16,
     auditError: AuditErrorCode,
+
+    pub fn getMemberName(self: *const AuditDescriptor, buffer: []const u8) []const u8 {
+        const start = self.member_offset;
+        const end = start + self.member_len;
+        std.debug.assert(end <= buffer.len);
+        return buffer[start..end];
+    }
 };
 
+// === 结果结构体定义（必须与C结构体完全匹配）===
+
+// 对象返回体
+pub const ResultObj = extern struct {
+    error_count: usize,
+    errors: [c.LMJCORE_MAX_READ_ERRORS]ReadError,
+    member_count: usize,
+    members: [0]MemberDescriptor, // 柔性数组
+
+    // 获取成员描述符切片
+    pub fn getMembers(self: *const ResultObj) []const MemberDescriptor {
+        // 直接通过指针转换获取柔性数组
+        return @as([*]const MemberDescriptor, @ptrCast(&self.members))[0..self.member_count];
+    }
+
+    // 遍历所有成员并打印（调试用）
+    pub fn debugPrint(self: *const ResultObj, buffer: []const u8) void {
+        std.debug.print("Object Result:\n", .{});
+        std.debug.print("  member_count: {d}\n", .{self.member_count});
+        std.debug.print("  error_count: {d}\n", .{self.error_count});
+
+        if (self.error_count > 0) {
+            for (self.errors[0..self.error_count]) |err| {
+                std.debug.print("  Error: code={}, element_offset={d}, element_len={d}\n", .{
+                    err.code,
+                    err.element.element_offset,
+                    err.element.element_len,
+                });
+            }
+        }
+
+        const members = self.getMembers();
+        for (members, 0..) |member, i| {
+            const name = member.getName(buffer);
+            const value = member.getValue(buffer);
+            std.debug.print("  Member[{d}]: name=\"{s}\" value=\"{s}\"\n", .{
+                i,
+                name,
+                value,
+            });
+        }
+    }
+};
+
+// 数组返回体
+pub const ResultArr = extern struct {
+    error_count: usize,
+    errors: [c.LMJCORE_MAX_READ_ERRORS]ReadError,
+    element_count: usize,
+    elements: [0]Descriptor, // 柔性数组
+
+    // 获取元素描述符切片
+    pub fn getElements(self: *const ResultArr) []const Descriptor {
+        return @as([*]const Descriptor, @ptrCast(&self.elements))[0..self.element_count];
+    }
+
+    // 遍历所有元素并打印（调试用）
+    pub fn debugPrint(self: *const ResultArr, buffer: []const u8) void {
+        std.debug.print("Array Result:\n", .{});
+        std.debug.print("  element_count: {d}\n", .{self.element_count});
+        std.debug.print("  error_count: {d}\n", .{self.error_count});
+
+        if (self.error_count > 0) {
+            for (self.errors[0..self.error_count]) |err| {
+                std.debug.print("  Error: code={}, element_offset={d}, element_len={d}\n", .{
+                    err.code,
+                    err.element.element_offset,
+                    err.element.element_len,
+                });
+            }
+        }
+
+        const elements = self.getElements();
+        for (elements, 0..) |element, i| {
+            const value = element.getValue(buffer);
+            std.debug.print("  Element[{d}]: value=\"{s}\"\n", .{ i, value });
+        }
+    }
+};
+
+// 审计报告
 pub const AuditReport = extern struct {
     audit_descriptor: [*]AuditDescriptor,
     audit_cont: usize,
@@ -177,43 +282,42 @@ pub const AuditReport = extern struct {
         return self.audit_descriptor[0..self.audit_cont];
     }
 
-    pub fn getMemberName(self: *const AuditDescriptor, buffer: []const u8) []const u8 {
-        return buffer[self.member_offset .. self.member_offset + self.member_len];
+    pub fn debugPrint(self: *const AuditReport, buffer: []const u8) void {
+        std.debug.print("Audit Report:\n", .{});
+        std.debug.print("  audit_cont: {d}\n", .{self.audit_cont});
+
+        const descriptors = self.getDescriptors();
+        for (descriptors, 0..) |desc, i| {
+            const member_name = desc.getMemberName(buffer);
+            std.debug.print("  Issue[{d}]: ptr={s}, member=\"{s}\", error={}\n", .{
+                i,
+                std.fmt.fmtSliceHexLower(&desc.ptr),
+                member_name,
+                desc.auditError,
+            });
+        }
     }
 };
 
 // === 函数指针类型 ===
 pub const PtrGeneratorFn = *const fn (?*anyopaque, [*c]u8) callconv(.c) c_int;
 
-pub const ResultObj = extern struct {
-    error_count: usize,
-    errors: [c.LMJCORE_MAX_READ_ERRORS]ReadError,
-    member_count: usize,
-    members: [0]MemberDescriptor, // flexible array
+// === 核心API封装（修正版）===
 
-    pub fn getMembers(self: *const ResultObj) []const MemberDescriptor {
-        return @as([*]const MemberDescriptor, @ptrCast(&self.members))[0..self.member_count];
-    }
+// UUIDv4生成器（符合C接口）
+pub export fn zig_uuidv4_generator(ctx: ?*anyopaque, out: [*c]u8) callconv(.c) c_int {
+    _ = ctx; // 未使用
+    var uuid: [16]u8 = undefined;
+    std.crypto.random.bytes(&uuid);
 
-    pub fn getName(self: *const MemberDescriptor, buffer: []const u8) []const u8 {
-        return self.member_name.getValue(buffer);
-    }
+    // 设置UUIDv4版本和变体位
+    uuid[6] = (uuid[6] & 0x0F) | 0x40; // 版本4
+    uuid[8] = (uuid[8] & 0x3F) | 0x80; // 变体1
 
-    pub fn getValue(self: *const MemberDescriptor, buffer: []const u8) []const u8 {
-        return self.member_value.getValue(buffer);
-    }
-};
-
-pub const ResultArr = extern struct {
-    error_count: usize,
-    errors: [c.LMJCORE_MAX_READ_ERRORS]ReadError,
-    element_count: usize,
-    elements: [0]Descriptor,
-
-    pub fn getElements(self: *const ResultArr) []const Descriptor {
-        return @as([*]const Descriptor, @ptrCast(&self.elements))[0..self.element_count];
-    }
-};
+    // 复制到输出缓冲区
+    @memcpy(out[1..17], &uuid);
+    return c.LMJCORE_SUCCESS;
+}
 
 // === 高级封装：安全读取对象 ===
 pub fn readObject(
@@ -221,20 +325,40 @@ pub fn readObject(
     obj_ptr: Ptr,
     allocator: std.mem.Allocator,
 ) !struct { result: *ResultObj, buffer: []u8 } {
-    // 初次调用估算大小（可选：先 stat_values）
+    // 初次调用估算大小
     var buf_size: usize = 4096;
     while (true) {
         const buffer = try allocator.alloc(u8, buf_size);
+        errdefer allocator.free(buffer);
+
         var result_head: ?*c.lmjcore_result_obj = undefined;
-        const rc = c.lmjcore_obj_get(txn, &obj_ptr, buffer.ptr, buffer.len, &result_head);
+        const rc = c.lmjcore_obj_get(
+            @as(*c.lmjcore_txn, @ptrCast(txn)),
+            &obj_ptr,
+            buffer.ptr,
+            buffer.len,
+            &result_head,
+        );
+
         if (rc == c.LMJCORE_ERROR_BUFFER_TOO_SMALL) {
             allocator.free(buffer);
             buf_size *= 2;
             continue;
         }
+
         try throw(rc);
+
         if (result_head == null) return error.UnexpectedNull;
+
+        // 转换指针类型（C -> Zig）
         const zig_result = @as(*ResultObj, @ptrCast(result_head.?));
+
+        // 确保result_head指向buffer内的地址
+        const result_addr = @intFromPtr(zig_result);
+        const buffer_start = @intFromPtr(buffer.ptr);
+        const buffer_end = buffer_start + buffer.len;
+        std.debug.assert(result_addr >= buffer_start and result_addr < buffer_end);
+
         return .{ .result = zig_result, .buffer = buffer };
     }
 }
@@ -248,17 +372,78 @@ pub fn readArray(
     var buf_size: usize = 4096;
     while (true) {
         const buffer = try allocator.alloc(u8, buf_size);
+        errdefer allocator.free(buffer);
+
         var result_head: ?*c.lmjcore_result_arr = undefined;
-        const rc = c.lmjcore_arr_get(txn, &arr_ptr, buffer.ptr, buffer.len, &result_head);
+        const rc = c.lmjcore_arr_get(
+            @as(*c.lmjcore_txn, @ptrCast(txn)),
+            &arr_ptr,
+            buffer.ptr,
+            buffer.len,
+            &result_head,
+        );
+
         if (rc == c.LMJCORE_ERROR_BUFFER_TOO_SMALL) {
             allocator.free(buffer);
             buf_size *= 2;
             continue;
         }
+
         try throw(rc);
+
         if (result_head == null) return error.UnexpectedNull;
+
         const zig_result = @as(*ResultArr, @ptrCast(result_head.?));
+
+        // 验证指针在buffer范围内
+        const result_addr = @intFromPtr(zig_result);
+        const buffer_start = @intFromPtr(buffer.ptr);
+        const buffer_end = buffer_start + buffer.len;
+        std.debug.assert(result_addr >= buffer_start and result_addr < buffer_end);
+
         return .{ .result = zig_result, .buffer = buffer };
+    }
+}
+
+// === 审计对象封装 ===
+pub fn auditObject(
+    txn: *Txn,
+    obj_ptr: Ptr,
+    allocator: std.mem.Allocator,
+) !struct { report: *AuditReport, buffer: []u8 } {
+    var buf_size: usize = 4096;
+    while (true) {
+        const buffer = try allocator.alloc(u8, buf_size);
+        errdefer allocator.free(buffer);
+
+        var report_head: ?*c.lmjcore_audit_report = undefined;
+        const rc = c.lmjcore_audit_object(
+            @as(*c.lmjcore_txn, @ptrCast(txn)),
+            &obj_ptr,
+            buffer.ptr,
+            buffer.len,
+            &report_head,
+        );
+
+        if (rc == c.LMJCORE_ERROR_BUFFER_TOO_SMALL) {
+            allocator.free(buffer);
+            buf_size *= 2;
+            continue;
+        }
+
+        try throw(rc);
+
+        if (report_head == null) return error.UnexpectedNull;
+
+        const zig_report = @as(*AuditReport, @ptrCast(report_head.?));
+
+        // 验证指针在buffer范围内
+        const report_addr = @intFromPtr(zig_report);
+        const buffer_start = @intFromPtr(buffer.ptr);
+        const buffer_end = buffer_start + buffer.len;
+        std.debug.assert(report_addr >= buffer_start and report_addr < buffer_end);
+
+        return .{ .report = zig_report, .buffer = buffer };
     }
 }
 
@@ -271,8 +456,16 @@ pub fn init(
     ptr_gen_ctx: ?*anyopaque,
 ) !*Env {
     var env: ?*c.lmjcore_env = undefined;
-    const rc = c.lmjcore_init(path, map_size, flags, ptr_gen, ptr_gen_ctx, &env);
+    const rc = c.lmjcore_init(
+        path.ptr,
+        map_size,
+        flags,
+        ptr_gen,
+        ptr_gen_ctx,
+        &env,
+    );
     try throw(rc);
+    if (env == null) return error.UnexpectedNull;
     return @as(*Env, @ptrCast(env.?));
 }
 
@@ -284,8 +477,13 @@ pub fn cleanup(env: *Env) !void {
 pub fn txnBegin(env: *Env, typ: TxnType) !*Txn {
     const c_type = @intFromEnum(typ);
     var txn: ?*c.lmjcore_txn = undefined;
-    const rc = c.lmjcore_txn_begin(@as(*c.lmjcore_env, @ptrCast(env)), c_type, &txn);
+    const rc = c.lmjcore_txn_begin(
+        @as(*c.lmjcore_env, @ptrCast(env)),
+        c_type,
+        &txn,
+    );
     try throw(rc);
+    if (txn == null) return error.UnexpectedNull;
     return @as(*Txn, @ptrCast(txn.?));
 }
 
@@ -301,13 +499,19 @@ pub fn txnAbort(txn: *Txn) void {
 // 对象创建
 pub fn objCreate(txn: *Txn) !Ptr {
     var ptr: Ptr = undefined;
-    const rc = c.lmjcore_obj_create(@as(*c.lmjcore_txn, @ptrCast(txn)), &ptr);
+    const rc = c.lmjcore_obj_create(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        &ptr,
+    );
     try throw(rc);
     return ptr;
 }
 
 pub fn objRegister(txn: *Txn, ptr: Ptr) !void {
-    const rc = c.lmjcore_obj_register(@as(*c.lmjcore_txn, @ptrCast(txn)), &ptr);
+    const rc = c.lmjcore_obj_register(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        &ptr,
+    );
     try throw(rc);
 }
 
@@ -349,36 +553,42 @@ pub fn objMemberGet(
     return actual_len;
 }
 
+// 数组操作
+pub fn arrCreate(txn: *Txn) !Ptr {
+    var ptr: Ptr = undefined;
+    const rc = c.lmjcore_arr_create(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        &ptr,
+    );
+    try throw(rc);
+    return ptr;
+}
+
+pub fn arrAppend(
+    txn: *Txn,
+    arr_ptr: Ptr,
+    value: []const u8,
+) !void {
+    const rc = c.lmjcore_arr_append(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        &arr_ptr,
+        value.ptr,
+        value.len,
+    );
+    try throw(rc);
+}
+
 // 存在性检查
 pub fn entityExist(txn: *Txn, ptr: Ptr) !bool {
-    const rc = c.lmjcore_entity_exist(@as(*c.lmjcore_txn, @ptrCast(txn)), &ptr);
+    const rc = c.lmjcore_entity_exist(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        &ptr,
+    );
     if (rc < 0) try throw(rc);
     return rc == 1;
 }
 
-// 审计
-pub fn auditObject(
-    txn: *Txn,
-    obj_ptr: Ptr,
-    allocator: std.mem.Allocator,
-) !struct { report: *AuditReport, buffer: []u8 } {
-    var buf_size: usize = 4096;
-    while (true) {
-        const buffer = try allocator.alloc(u8, buf_size);
-        var report_head: ?*c.lmjcore_audit_report = undefined;
-        const rc = c.lmjcore_audit_object(@as(*c.lmjcore_txn, @ptrCast(txn)), &obj_ptr, buffer.ptr, buffer.len, &report_head);
-        if (rc == c.LMJCORE_ERROR_BUFFER_TOO_SMALL) {
-            allocator.free(buffer);
-            buf_size *= 2;
-            continue;
-        }
-        try throw(rc);
-        if (report_head == null) return error.UnexpectedNull;
-        const zig_report = @as(*AuditReport, @ptrCast(report_head.?));
-        return .{ .report = zig_report, .buffer = buffer };
-    }
-}
-
+// 修复对象
 pub fn repairObject(txn: *Txn, report: *AuditReport, buffer: []u8) !void {
     const rc = c.lmjcore_repair_object(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
@@ -387,4 +597,40 @@ pub fn repairObject(txn: *Txn, report: *AuditReport, buffer: []u8) !void {
         @as(*c.lmjcore_audit_report, @ptrCast(report)),
     );
     try throw(rc);
+}
+
+// 统计函数
+pub fn objStatValues(
+    txn: *Txn,
+    obj_ptr: Ptr,
+) !struct { total_value_len: usize, total_value_count: usize } {
+    var total_len: usize = undefined;
+    var total_count: usize = undefined;
+    const rc = c.lmjcore_obj_stat_values(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        &obj_ptr,
+        &total_len,
+        &total_count,
+    );
+    try throw(rc);
+    return .{
+        .total_value_len = total_len,
+        .total_value_count = total_count,
+    };
+}
+
+// 指针转换工具
+pub fn ptrToString(ptr: Ptr, allocator: std.mem.Allocator) ![:0]const u8 {
+    // 34字符HEX + 空终止符
+    const str = try allocator.alloc(u8, 35);
+    const rc = c.lmjcore_ptr_to_string(&ptr, str.ptr, str.len);
+    try throw(rc);
+    return str[0..34 :0];
+}
+
+pub fn ptrFromString(str: [:0]const u8) !Ptr {
+    var ptr: Ptr = undefined;
+    const rc = c.lmjcore_ptr_from_string(str.ptr, &ptr);
+    try throw(rc);
+    return ptr;
 }

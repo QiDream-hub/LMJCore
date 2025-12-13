@@ -6,7 +6,7 @@ int main() {
   lmjcore_ptr ptr;
   void *ctx = NULL;
 
-  int rc = lmjcore_uuidv4_ptr_gen(ctx, ptr);
+  lmjcore_uuidv4_ptr_gen(ctx, ptr);
 
   ptr[0] = LMJCORE_OBJ;
 

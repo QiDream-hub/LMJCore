@@ -229,12 +229,17 @@ cd lmjcore
 make
 ```
 
-### 基准测试（开发中）
+### 测试
 
 ```bash
-./benchmarks/read_benchmark
-./benchmarks/write_benchmark
-./tests/integration_test
+# lmjcore 核心测试
+
+#基础读写测试
+mkdir -p lmjcre_db/
+./build/LMJCoreTest 
+
+
+
 ```
 
 ---

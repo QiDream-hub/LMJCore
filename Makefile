@@ -2,11 +2,11 @@
 
 # 配置
 export BUILD_DIR = $(CURDIR)/build
-export INSTALL_DIR = $(CURDIR)/bin
 export CC = gcc
-export CFLAGS = -Wall -Wextra -g -I$(CURDIR)/core/include -I$(CURDIR)/Toolkit/config_obj_toolkit/include
+export CFLAGS = -Wall -Wextra -g -I$(CURDIR)/core/include
 export LDFLAGS = -llmdb
 export LD_LIBRARY_PATH = $(BUILD_DIR)
+export TEST_BIN = $(BUILD_DIR)/bin
 
 # 默认目标
 .PHONY: all
@@ -34,34 +34,22 @@ tests: core toolkit
 	@echo "Building tests..."
 	$(MAKE) -C tests
 
-# 仅复制到本地 bin 目录（不安装到系统）
-.PHONY: install
-install: all
-	@echo "Copying binaries to local bin directory..."
-	@mkdir -p $(INSTALL_DIR)
-	@cp $(BUILD_DIR)/*.so $(INSTALL_DIR)/ 2>/dev/null || true
-	@cp $(BUILD_DIR)/*Test $(INSTALL_DIR)/ 2>/dev/null || true
-	@echo "Binaries copied to $(INSTALL_DIR)"
-
 # 清理所有构建产物
 .PHONY: clean
 clean:
 	$(MAKE) -C core clean
 	$(MAKE) -C Toolkit/config_obj_toolkit clean
+	$(MAKE) -C Toolkit/ptr_uuid_gen clean
+	$(MAKE) -C Toolkit/result_parser clean
 	$(MAKE) -C tests clean
 	rm -rf $(BUILD_DIR)
 
-# 深度清理（包括本地 bin 目录）
-.PHONY: distclean
-distclean: clean
-	rm -rf $(INSTALL_DIR)
 
 # 检查依赖
 .PHONY: check-deps
 check-deps:
 	@echo "Checking dependencies..."
 	@pkg-config --exists lmdb && echo "✓ lmdb found" || echo "✗ lmdb not found"
-	@pkg-config --exists uuid && echo "✓ uuid found" || echo "✗ uuid not found"
 	@echo "Dependency check completed"
 
 # 运行测试（设置库路径）
@@ -75,6 +63,5 @@ test: all
 info:
 	@echo "LMJCore Build System"
 	@echo "Build Directory: $(BUILD_DIR)"
-	@echo "Local Bin Directory: $(INSTALL_DIR)"
 	@echo "Dependencies: lmdb, uuid"
 	@echo "Library Path: $(LD_LIBRARY_PATH)"

@@ -2,9 +2,9 @@
 #include "../../core/include/lmjcore.h"
 #include <stdio.h>
 
-int main() {
+int main(int argc,char *argv[]) {
   lmjcore_ptr ptr;
-  lmjcore_ptr_from_string("0192cc5c281d6f4ff7952aaa6408f76a6e", ptr);
+  lmjcore_ptr_from_string(argv[1], ptr);
 
   // 创建lmjcore环境变量
   lmjcore_env *env = NULL;

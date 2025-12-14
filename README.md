@@ -224,22 +224,44 @@ LMJCore **不提供“宽松/严格”读取模式开关**。
 ## 🛠️ 构建与测试
 
 ```bash
-git clone https://github.com/your-username/lmjcore.git
+git clone https://github.com/QiDream-hub/LMJCore.gi
 cd lmjcore
 make
 ```
 
 ### 测试
 
+#### lmjcore 核心测试
 ```bash
-# lmjcore 核心测试
-
 #基础读写测试
 mkdir -p lmjcre_db/
-./build/LMJCoreTest 
-
-
-
+./build/bin/LMJCoreTest 
+```
+```bash
+#持久化数据读取测试
+mkdir -p lmjcre_db/
+./build/bin/LMJCoreTest 
+./build/bin/readTest [指针]
+```
+```bash
+#压力测试
+#特别说明压力测试使用多线程且没有优化读取与写入的时机导致会出现在同时多个写入导致失败报错
+mkdir -p lmjcre_db/
+./build/bin/stressTest
+```
+#### 工具包测试
+```bash
+#配置对象测试
+mkdir -p lmjcre_db/config_test
+./build/bin/config_obj_test
+```
+```bash
+#返回体解析工具测试
+./build/bin/result_parsert_test
+```
+```bash
+#UUIDV4指针生成器测试
+./build/bin/ptr_uuid_gen
 ```
 
 ---

@@ -284,6 +284,23 @@ int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr);
 
 /**
+ * @brief 获取对象的成员列表
+ *
+ * 结果写入调用方提供的 result_buf 缓冲区，采用紧凑布局：
+ *  [ lmjcore_result_arr头部 | element_descriptor数组 | 元素数据（从后向前） ]
+ *
+ * @param txn 有效事务句柄
+ * @param obj_ptr 数组指针
+ * @param result_buf 输出缓冲区
+ * @param result_buf_size 缓冲区大小
+ * @param result_head 输出：指向 result_buf 中 lmjcore_result_arr 结构的指针
+ * @return 错误码（LMJCORE_SUCCESS 表示成功，即使有语义错误也视为成功）
+ */
+int lmjcore_obj_member_list(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
+                            uint8_t *result_buf, size_t result_buf_size,
+                            lmjcore_result_arr **result_head);
+
+/**
  * @brief 获取对象指定成员的值
  *
  * @param txn 有效的读事务句柄
@@ -383,6 +400,18 @@ int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                             size_t *total_value_len_out,
                             size_t *total_value_count_out);
 
+/**
+ * @brief 统计数组的元素总长度和数量
+ *
+ * @param txn 有效的读事务句柄
+ * @param obj_ptr 数组指针
+ * @param total_member_len_out 输出参数，元素值总长度
+ * @param member_count_out 输出参数，元素总数量
+ * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ */
+int lmjcore_obj_stat_members(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
+                             size_t *total_member_len_out,
+                             size_t *member_count_out);
 // ==================== 数组操作 ====================
 
 /**
@@ -451,15 +480,15 @@ int lmjcore_arr_element_del(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
 // ==================== 数组工具函数 ====================
 
 /**
- * @brief 统计数组或成员列表的元素总长度和数量
+ * @brief 统计数组的元素总长度和数量
  *
  * @param txn 有效的读事务句柄
- * @param ptr 目标指针（数组或对象）
+ * @param arr_ptr 数组指针
  * @param total_value_len_out 输出参数，元素值总长度
  * @param element_count_out 输出参数，元素总数量
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
-int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr ptr,
+int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
                              size_t *total_value_len_out,
                              size_t *element_count_out);
 

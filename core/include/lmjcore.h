@@ -65,7 +65,7 @@ extern "C" {
 // 指针长度（字节）
 #define LMJCORE_PTR_LEN 17
 // 成员名最大长度（基于 LMDB 键长限制计算）
-#define LMJCORE_MAX_MEMBER_NAME_LEN LMJCORE_MAX_KEY_LEN - LMJCORE_PTR_LEN - 1
+#define LMJCORE_MAX_MEMBER_NAME_LEN (LMJCORE_MAX_KEY_LEN - LMJCORE_PTR_LEN - 1)
 
 // 实体类型枚举
 typedef enum {
@@ -106,7 +106,8 @@ typedef struct lmjcore_txn lmjcore_txn;
 typedef struct lmjcore_env lmjcore_env;
 
 // 指针生成器函数类型
-typedef int (*lmjcore_ptr_generator_fn)(void *ctx, uint8_t out[LMJCORE_PTR_LEN]);
+typedef int (*lmjcore_ptr_generator_fn)(void *ctx,
+                                        uint8_t out[LMJCORE_PTR_LEN]);
 
 // 读取错误详情结构
 typedef struct {
@@ -151,16 +152,15 @@ typedef struct {
 
 // 审计条目描述符
 typedef struct {
-  lmjcore_ptr ptr;                // 相关实体指针
-  size_t member_offset;           // 成员名偏移量
-  uint16_t member_len;            // 成员名长度
-  lmjcore_audit_error_code error; // 审计错误类型
+  lmjcore_ptr ptr;                  // 相关实体指针
+  lmjcore_audit_error_code error;   // 审计错误类型
+  lmjcore_member_descriptor member; // 幽灵成员
 } lmjcore_audit_descriptor;
 
 // 审计报告结构
 typedef struct {
-  lmjcore_audit_descriptor *audit_descriptor; // 审计条目数组
-  size_t audit_cont;                          // 审计条目数量
+  size_t audit_cont;                           // 审计条目数量
+  lmjcore_audit_descriptor audit_descriptor[]; // 审计条目数组
 } lmjcore_audit_report;
 
 // ==================== 初始化与清理 ====================

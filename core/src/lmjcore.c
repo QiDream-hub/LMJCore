@@ -119,7 +119,7 @@ static void mdb_val_list_free_all(MDB_val_list *head) {
  */
 static inline bool OBJ_KEY_PREFIX(const lmjcore_ptr obj_ptr, MDB_val key) {
   return (key.mv_size >= LMJCORE_PTR_LEN) &&
-         (memcmp(key.mv_data, obj_ptr, 17) == 0);
+         (memcmp(key.mv_data, obj_ptr, LMJCORE_PTR_LEN) == 0);
 }
 
 /**
@@ -171,16 +171,16 @@ static bool result_arr_add_error(lmjcore_result_arr *result,
 /**
  * @brief 添加审计记录
  */
-static int add_audit(lmjcore_audit_report *report, uint8_t *buf,
-                     lmjcore_audit_error_code error, const MDB_val *member_name,
+static int add_audit(uint8_t *buf, lmjcore_audit_error_code error,
+                     const MDB_val *member_name, const MDB_val *member_value,
                      const lmjcore_ptr obj_ptr, size_t *data_offset,
                      size_t *report_descriptor_offset) {
-  if (!report || !buf || !member_name || !obj_ptr || !data_offset ||
+  if (!buf || !member_name || !obj_ptr || !data_offset ||
       !report_descriptor_offset) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
 
-  size_t needed = member_name->mv_size;
+  size_t needed = member_name->mv_size + member_value->mv_size;
   size_t desc_size = sizeof(lmjcore_audit_descriptor);
 
   // 检查描述符区是否有空间
@@ -193,19 +193,35 @@ static int add_audit(lmjcore_audit_report *report, uint8_t *buf,
     return LMJCORE_ERROR_BUFFER_TOO_SMALL;
   }
 
+  // 初始化审计描述符
+  lmjcore_audit_descriptor descriptor = {0};
+
   // 写入成员名（从缓冲区末尾向前）
-  *data_offset -= needed;
-  memcpy(buf + *data_offset, member_name->mv_data, needed);
+  *data_offset -= member_name->mv_size;
+  memcpy(buf + *data_offset, member_name->mv_data, member_name->mv_size);
+  // 设置成员名描述符
+  descriptor.member.member_name.value_offset = *data_offset;
+  descriptor.member.member_name.value_len = member_name->mv_size;
+  // 设置成员值初始值(空)
+  descriptor.member.member_value.value_offset = 0;
+  descriptor.member.member_value.value_len = 0;
+  if (member_value != NULL) {
+    // 写入成员值
+    *data_offset -= member_value->mv_size;
+    memcpy(buf + *data_offset, member_value->mv_data, member_value->mv_size);
+    descriptor.member.member_value.value_offset = *data_offset;
+    descriptor.member.member_value.value_len = member_value->mv_size;
+  }
 
-  // 写入审计描述符
-  lmjcore_audit_descriptor *desc =
-      &report->audit_descriptor[report->audit_cont];
-  desc->error = error;
-  memcpy(desc->ptr, obj_ptr, LMJCORE_PTR_LEN);
-  desc->member_offset = *data_offset;
-  desc->member_len = (uint16_t)needed;
+  // 设置错误码
+  descriptor.error = error;
+  // 设置指针
+  memcpy(descriptor.ptr, obj_ptr, LMJCORE_PTR_LEN);
 
-  report->audit_cont++;
+  // 将描述符写入buff
+  memcpy(buf + *report_descriptor_offset, &descriptor,
+         sizeof(lmjcore_audit_descriptor));
+
   *report_descriptor_offset += desc_size;
 
   return LMJCORE_SUCCESS;
@@ -1191,8 +1207,6 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   // 初始化报告头
   lmjcore_audit_report *report = (lmjcore_audit_report *)report_buf;
   report->audit_cont = 0;
-  report->audit_descriptor =
-      (lmjcore_audit_descriptor *)(report_buf + sizeof(lmjcore_audit_report));
   *report_head = report;
 
   size_t report_desc_offset = sizeof(lmjcore_audit_report);
@@ -1234,7 +1248,7 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   while (rc == MDB_SUCCESS) {
     // 检查 key 是否属于当前 obj_ptr（前LMJCORE_PTR_LEN字节匹配）
     if (key.mv_size < LMJCORE_PTR_LEN ||
-        memcmp(key.mv_data, obj_ptr, 17) != 0) {
+        memcmp(key.mv_data, obj_ptr, LMJCORE_PTR_LEN) != 0) {
       break; // 已超出当前对象的 key 范围
     }
 
@@ -1248,8 +1262,8 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
       if (!mdb_val_list_remove(&registered_members, &member_name)) {
         // 未注册 → 幽灵成员
         int err =
-            add_audit(report, report_buf, LMJCORE_AUDITERR_GHOST_MEMBER,
-                      &member_name, obj_ptr, &data_offset, &report_desc_offset);
+            add_audit(report_buf, LMJCORE_AUDITERR_GHOST_MEMBER, &member_name,
+                      &value, obj_ptr, &data_offset, &report_desc_offset);
         if (err != LMJCORE_SUCCESS) {
           rc = err;
           goto cleanup;
@@ -1266,8 +1280,8 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   // Step 3: registered_members 中剩下的就是“缺失值”（已注册但无值）
   MDB_val_list *node = registered_members;
   while (node) {
-    int err = add_audit(report, report_buf, LMJCORE_AUDITERR_MISSING_VALUE,
-                        &node->val, obj_ptr, &data_offset, &report_desc_offset);
+    int err = add_audit(report_buf, LMJCORE_AUDITERR_MISSING_VALUE, &node->val,
+                        NULL, obj_ptr, &data_offset, &report_desc_offset);
     if (err != LMJCORE_SUCCESS) {
       rc = err;
       goto cleanup;
@@ -1293,7 +1307,7 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
   }
 
   // 没有错误
-  if (report->audit_descriptor == NULL || report->audit_cont == 0) {
+  if (report->audit_cont == 0) {
     return LMJCORE_SUCCESS;
   }
 
@@ -1305,18 +1319,21 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
 
     if (desc->error == LMJCORE_AUDITERR_GHOST_MEMBER) {
       // 验证成员名偏移和长度
-      if (desc->member_offset + desc->member_len > report_buf_size) {
+      if (desc->member.member_name.value_offset +
+              desc->member.member_name.value_len >
+          report_buf_size) {
         final_result = LMJCORE_ERROR_INVALID_PARAM;
         break;
       }
 
       // 构建幽灵成员的完整key: <LMJCORE_PTR_LEN字节指针> + <成员名>
-      size_t key_len = LMJCORE_PTR_LEN + desc->member_len;
-      uint8_t *ghost_key[key_len];
+      size_t key_len = LMJCORE_PTR_LEN + desc->member.member_name.value_len;
+      uint8_t ghost_key[key_len];
 
       memcpy(ghost_key, desc->ptr, LMJCORE_PTR_LEN);
-      memcpy(ghost_key + LMJCORE_PTR_LEN, report_buf + desc->member_offset,
-             desc->member_len);
+      memcpy(ghost_key + LMJCORE_PTR_LEN,
+             report_buf + desc->member.member_name.value_offset,
+             desc->member.member_name.value_len);
 
       MDB_val key = {.mv_data = ghost_key, .mv_size = key_len};
       MDB_val value;
@@ -1372,7 +1389,7 @@ int lmjcore_obj_member_value_exist(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   }
 
   // 申请临时内存,用于存储成员key
-  uint8_t *member_key[LMJCORE_PTR_LEN + member_name_len];
+  uint8_t member_key[LMJCORE_PTR_LEN + member_name_len];
   memcpy(member_key, obj_ptr, LMJCORE_PTR_LEN);
   memcpy(member_key + LMJCORE_PTR_LEN, member_name, member_name_len);
   MDB_val key = {.mv_data = (void *)member_key,

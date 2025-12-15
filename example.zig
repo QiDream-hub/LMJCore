@@ -35,7 +35,7 @@ pub fn main() !void {
     var txn = try lmjcore.txnBegin(env, lmjcore.TxnType.write);
 
     const obj = try lmjcore.objCreate(txn);
-    try lmjcore.objMemberPut(txn, obj, "name", "value");
+    try lmjcore.objMemberPut(txn, &obj, "name", "value");
 
     try lmjcore.txnCommit(txn);
 
@@ -44,34 +44,23 @@ pub fn main() !void {
     // 开始只读事务
     txn = try lmjcore.txnBegin(env, lmjcore.TxnType.readonly);
 
-    const allocator = std.heap.page_allocator;
-    const read_result = try lmjcore.readObject(txn, obj, allocator);
-
-    // 获取结果对象和缓冲区
-    const result_obj = read_result.result;
-    const buffer = read_result.buffer;
-
-    result_obj.debugPrint(buffer);
-
-    defer {
-        // 清理缓冲区
-        allocator.free(buffer);
-    }
+    var buffer: [4096]u8 align(@sizeOf(usize)) = undefined;
+    const read_result = try lmjcore.readObject(txn, &obj, &buffer);
 
     // 获取所有成员
-    const members = result_obj.getMembers();
+    const members = read_result.getMembers();
 
     // 遍历并打印每个成员
     for (members) |member| {
-        const name = member.getName(buffer);
-        const value = member.getValue(buffer);
+        const name = member.getName(&buffer);
+        const value = member.getValue(&buffer);
 
         std.debug.print("Member: {s} = {s}\n", .{ name, value });
     }
 
     // 也可以检查是否有错误
-    if (result_obj.error_count > 0) {
-        std.debug.print("Warning: {d} read errors occurred\n", .{result_obj.error_count});
+    if (read_result.error_count > 0) {
+        std.debug.print("Warning: {d} read errors occurred\n", .{read_result.error_count});
     }
 
     // 提交只读事务

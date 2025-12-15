@@ -93,7 +93,7 @@ typedef int (*lmjcore_ptr_generator_fn)(void *ctx, uint8_t out[17]);
 
 #### 函数签名
 ```c
-int lmjcore_exist(lmjcore_txn txn, lmjcore_ptr ptr);
+int lmjcore_entity_exist(lmjcore_txn *txn, const lmjcore_ptr ptr);
 ```
 
 #### 返回值语义

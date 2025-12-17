@@ -35,7 +35,8 @@ pub fn main() !void {
     var txn = try lmjcore.txnBegin(env, lmjcore.TxnType.write);
 
     const obj = try lmjcore.objCreate(txn);
-    try lmjcore.objMemberPut(txn, &obj, "name", "value");
+    try lmjcore.objMemberPut(txn, &obj, "name", "name");
+    try lmjcore.objMemberPut(txn, &obj, "value", "value");
 
     try lmjcore.txnCommit(txn);
 
@@ -65,6 +66,14 @@ pub fn main() !void {
 
     // 提交只读事务
     try lmjcore.txnCommit(txn);
+
+    // 审计
+    txn = try lmjcore.txnBegin(env, .readonly);
+
+    var auditBuffer: [4096]u8 align(@sizeOf(usize)) = undefined;
+    const re = try lmjcore.auditObject(txn, &obj, &auditBuffer);
+
+    re.debugPrint();
 
     try lmjcore.cleanup(env);
 }

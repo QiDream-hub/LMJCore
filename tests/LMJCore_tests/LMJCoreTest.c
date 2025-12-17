@@ -91,6 +91,15 @@ int main() {
 
   lmjcore_txn_commit(txn);
 
+  lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+
+  uint8_t buff[4096];
+  lmjcore_audit_report *head;
+
+  rc = lmjcore_audit_object(txn, obj_ptr, buff, 4096, &head);
+
+  printf("%d",rc);
+
   // 清理
   lmjcore_cleanup(env);
   //   printf("操作成功完成\n");

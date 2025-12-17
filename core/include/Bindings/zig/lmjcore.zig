@@ -184,9 +184,10 @@ pub const AuditDescriptor = extern struct {
     auditError: AuditErrorCode,
     member: MemberDescriptor,
 
-    // 从buffer中获取成员名
-    pub fn getMemberName(self: *const AuditDescriptor, buffer: []const u8) []const u8 {
-        return self.member.getName(buffer);
+    // 获取成员描述符切片
+    pub fn getMembers(self: *const ResultObj) []const MemberDescriptor {
+        // 直接通过指针转换获取柔性数组
+        return @as([*]const MemberDescriptor, @ptrCast(&self.members))[0..self.member_count];
     }
 };
 
@@ -279,20 +280,9 @@ pub const AuditReport = extern struct {
         return @as([*]const AuditDescriptor, @ptrCast(&self.audit_descriptor))[0..self.audit_cont];
     }
 
-    pub fn debugPrint(self: *const AuditReport, buffer: []const u8) void {
+    pub fn debugPrint(self: *const AuditReport) void {
         std.debug.print("Audit Report:\n", .{});
         std.debug.print("  audit_cont: {d}\n", .{self.audit_cont});
-
-        const descriptors = self.getDescriptors();
-        for (descriptors, 0..) |desc, i| {
-            const member_name = desc.getMemberName(buffer);
-            std.debug.print("  Issue[{d}]: ptr={s}, member=\"{s}\", error={}\n", .{
-                i,
-                std.fmt.fmtSliceHexLower(&desc.ptr),
-                member_name,
-                desc.auditError,
-            });
-        }
     }
 };
 

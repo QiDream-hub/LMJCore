@@ -1225,7 +1225,7 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 
   MDB_val key = {.mv_data = (void *)obj_ptr, .mv_size = LMJCORE_PTR_LEN};
   MDB_val value;
-  rc = mdb_cursor_get(cursor, &key, &value, MDB_FIRST_DUP);
+  rc = mdb_cursor_get(cursor, &key, &value, MDB_SET);
   while (rc == MDB_SUCCESS) {
     if (!mdb_val_list_append(&registered_members, value)) {
       rc = LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED;

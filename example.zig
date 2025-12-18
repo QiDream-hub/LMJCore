@@ -43,7 +43,7 @@ pub fn main() !void {
     std.debug.print("Object Write Success!\n", .{});
 
     // 开始只读事务
-    txn = try lmjcore.txnBegin(env, lmjcore.TxnType.readonly);
+    txn = try lmjcore.txnBegin(env, .readonly);
 
     var buffer: [4096]u8 align(@sizeOf(usize)) = undefined;
     const read_result = try lmjcore.readObject(txn, &obj, &buffer);
@@ -64,16 +64,20 @@ pub fn main() !void {
         std.debug.print("Warning: {d} read errors occurred\n", .{read_result.error_count});
     }
 
+    var memberBuffer: [2048]u8 align(@sizeOf(usize)) = undefined;
+    const reMember = try lmjcore.readMembers(txn, &obj, &memberBuffer);
+    reMember.debugPrint(&memberBuffer);
+
     // 提交只读事务
-    try lmjcore.txnCommit(txn);
+    lmjcore.txnAbort(txn);
 
     // 审计
     txn = try lmjcore.txnBegin(env, .readonly);
 
     var auditBuffer: [4096]u8 align(@sizeOf(usize)) = undefined;
     const re = try lmjcore.auditObject(txn, &obj, &auditBuffer);
-
     re.debugPrint();
 
+    lmjcore.txnAbort(txn);
     try lmjcore.cleanup(env);
 }

@@ -14,10 +14,11 @@ BASE_LDFLAGS = -L$(BUILD_DIR) -Wl,-rpath,$(BUILD_DIR) -llmdb -llmjuuidgen
 # 测试程序
 CONFIG_TEST_SRC = lmjcore_config_obj_test/config_obj_test.c
 RESULT_PARSER_TEST_SRC = result_parser/result_parser_test.c
+PTR_UUID_GEN_SRC = ptr_gen_test/uuidv4.c
 CORE_TEST_SRC = LMJCore_tests/LMJCoreTest.c
 READ_TEST_SRC = LMJCore_tests/readTest.c
 STRESS_TEST_SRC = LMJCore_tests/stressTest.c
-PTR_UUID_GEN_SRC = ptr_gen_test/uuidv4.c
+API_TEST_SRC = LMJCore_tests/APITest.c
 
 # 测试二进制文件路径
 TEST_BIN ?= $(BUILD_DIR)/bin
@@ -28,6 +29,7 @@ TEST_TARGETS = \
 	$(TEST_BIN)/LMJCoreTest \
 	$(TEST_BIN)/readTest \
 	$(TEST_BIN)/stressTest \
+	$(TEST_BIN)/APITest \
 	$(TEST_BIN)/ptr_uuid_gen
 
 
@@ -67,9 +69,15 @@ $(TEST_BIN)/readTest: $(READ_TEST_SRC) | $(BUILD_DIR)/liblmjcore.so
 
 # 构建压力测试（依赖核心库）
 $(TEST_BIN)/stressTest: $(STRESS_TEST_SRC) | $(BUILD_DIR)/liblmjcore.so
-	@mkdir -p $(BUILD_DIR)
+	@mkdir -p $(TEST_BIN)
 	$(CC) $(CFLAGS) -o $@ $< $(BASE_LDFLAGS) -llmjcore
 	@echo "Built stressTest"
+
+# API测试
+$(TEST_BIN)/APITest: $(API_TEST_SRC) | $(BUILD_DIR)/liblmjcore.so
+	@mkdir -p $(TEST_BIN)
+	$(CC) $(CFLAGS) -o $@ $< $(BASE_LDFLAGS) -llmjcore
+	@echo "Built APITest"
 
 # 确保依赖库存在
 $(BUILD_DIR)/liblmjcore.so:

@@ -1155,8 +1155,7 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
       }
       // 记录审计数量
       report->audit_cont++;
-    }
-    if (exist != MDB_SUCCESS) {
+    } else if (exist != MDB_SUCCESS) {
       rc = exist;
       goto cleanup;
     }

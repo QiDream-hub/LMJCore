@@ -18,6 +18,7 @@ PTR_UUID_GEN_SRC = ptr_gen_test/uuidv4.c
 CORE_TEST_SRC = LMJCore_tests/LMJCoreTest.c
 READ_TEST_SRC = LMJCore_tests/readTest.c
 STRESS_TEST_SRC = LMJCore_tests/stressTest.c
+AUDIT_TEST_SRC = LMJCore_tests/ghostMember.c
 API_TEST_SRC = LMJCore_tests/APITest.c
 
 # 测试二进制文件路径
@@ -30,6 +31,7 @@ TEST_TARGETS = \
 	$(TEST_BIN)/readTest \
 	$(TEST_BIN)/stressTest \
 	$(TEST_BIN)/APITest \
+	$(TEST_BIN)/ghostTest \
 	$(TEST_BIN)/ptr_uuid_gen
 
 
@@ -78,6 +80,12 @@ $(TEST_BIN)/APITest: $(API_TEST_SRC) | $(BUILD_DIR)/liblmjcore.so
 	@mkdir -p $(TEST_BIN)
 	$(CC) $(CFLAGS) -o $@ $< $(BASE_LDFLAGS) -llmjcore
 	@echo "Built APITest"
+
+# 幽灵成员检查测试
+$(TEST_BIN)/ghostTest: $(AUDIT_TEST_SRC) | $(BUILD_DIR)/liblmjcore.so
+	@mkdir -p $(TEST_BIN)
+	$(CC) $(CFLAGS) -o $@ $< $(BASE_LDFLAGS) -llmjcore
+	@echo "Built ghostTest"
 
 # 确保依赖库存在
 $(BUILD_DIR)/liblmjcore.so:

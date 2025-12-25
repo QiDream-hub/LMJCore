@@ -130,12 +130,6 @@ pub const ReadErrorCode = enum(c.lmjcore_read_error_code) {
     member_missing = c.LMJCORE_READERR_MEMBER_MISSING,
 };
 
-pub const AuditErrorCode = enum(c.lmjcore_audit_error_code) {
-    ghost_object = c.LMJCORE_AUDITERR_GHOST_OBJECT,
-    ghost_member = c.LMJCORE_AUDITERR_GHOST_MEMBER,
-    missing_value = c.LMJCORE_AUDITERR_MISSING_VALUE,
-};
-
 // === 句柄类型（opaque）===
 pub const Env = opaque {};
 pub const Txn = opaque {};
@@ -181,7 +175,6 @@ pub const ReadError = extern struct {
 
 pub const AuditDescriptor = extern struct {
     ptr: Ptr,
-    auditError: AuditErrorCode,
     member: MemberDescriptor,
 
     // 获取成员描述符切片

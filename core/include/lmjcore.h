@@ -86,16 +86,6 @@ typedef enum {
   LMJCORE_READERR_MEMBER_MISSING,       // 对象成员值缺失
 } lmjcore_read_error_code;
 
-// 审计错误代码枚举
-typedef enum {
-  LMJCORE_AUDITERR_GHOST_OBJECT =
-      -1, // 幽灵对象：指针在 main 库有数据但未在 arr 库注册
-  LMJCORE_AUDITERR_GHOST_MEMBER =
-      -2, // 幽灵成员：在 main 库存在但未在 arr 成员列表中注册
-  LMJCORE_AUDITERR_MISSING_VALUE =
-      -3, // 缺失值：在 arr 库注册但未在 main 库赋值
-} lmjcore_audit_error_code;
-
 // 17字节实体指针类型
 typedef uint8_t lmjcore_ptr[LMJCORE_PTR_LEN];
 
@@ -153,7 +143,6 @@ typedef struct {
 // 审计条目描述符
 typedef struct {
   lmjcore_ptr ptr;                  // 相关实体指针
-  lmjcore_audit_error_code error;   // 审计错误类型
   lmjcore_member_descriptor member; // 幽灵成员
 } lmjcore_audit_descriptor;
 

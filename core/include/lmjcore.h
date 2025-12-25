@@ -67,6 +67,10 @@ extern "C" {
 // 成员名最大长度（基于 LMDB 键长限制计算）
 #define LMJCORE_MAX_MEMBER_NAME_LEN (LMJCORE_MAX_KEY_LEN - LMJCORE_PTR_LEN - 1)
 
+// 指针字符串长度
+#define LMJCORE_PTR_STRING_LEN (LMJCORE_PTR_LEN * 2)
+#define LMJCORE_PTR_STRING_BUF_SIZE (LMJCORE_PTR_STRING_LEN + 1)
+
 // 实体类型枚举
 typedef enum {
   LMJCORE_OBJ = 0x01, // 对象类型
@@ -258,16 +262,15 @@ int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                     lmjcore_result_obj **result_head);
 
 /**
- * @brief 完全删除指定对象及其所有成员
+ * @brief 完全删除对象成员（包括注册信息和值）
  *
- * 执行以下操作：
- * 1. 从 arr 库获取对象的所有成员列表
- * 2. 遍历删除 main 库中所有成员键值对
- * 3. 删除 arr 库中的成员列表条目
- * 4. 对象指针变为无效
+ * 同时从 arr 库的成员列表和 main 库的键值对中删除该成员。
+ * 注意：会先删除 main 中的值（如果存在），再删除 arr 中的注册。
  *
  * @param txn 有效的写事务句柄
- * @param obj_ptr 待删除的对象指针
+ * @param obj_ptr 目标对象指针
+ * @param member_name 成员名称（二进制安全字节序列）
+ * @param member_name_len 成员名称长度
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr);

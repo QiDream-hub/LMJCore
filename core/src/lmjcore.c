@@ -1028,7 +1028,7 @@ int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   do {
     // 检查当前key是否还属于同一个对象
     if (key.mv_size < LMJCORE_PTR_LEN ||
-        memcmp(key.mv_data, obj_ptr, 17) != 0) {
+        memcmp(key.mv_data, obj_ptr, LMJCORE_PTR_LEN) != 0) {
       // 已经移动到下一个对象，结束遍历
       break;
     }
@@ -1198,6 +1198,14 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
       break;
     }
 
+    // 成员值的验证
+    if (desc->member.member_value.value_offset +
+            desc->member.member_value.value_len >
+        report_buf_size) {
+      final_result = LMJCORE_ERROR_INVALID_PARAM;
+      break;
+    }
+
     // 构建幽灵成员的完整key: <LMJCORE_PTR_LEN字节指针> + <成员名>
     size_t key_len = LMJCORE_PTR_LEN + desc->member.member_name.value_len;
     uint8_t ghost_key[key_len];
@@ -1285,7 +1293,7 @@ int lmjcore_obj_member_value_exist(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 // 指针转字符串
 int lmjcore_ptr_to_string(const lmjcore_ptr ptr, char *str_buf,
                           size_t buf_size) {
-  if (!ptr || !str_buf || buf_size < 34) {
+  if (!ptr || !str_buf || buf_size < LMJCORE_PTR_STRING_LEN) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
 
@@ -1295,14 +1303,14 @@ int lmjcore_ptr_to_string(const lmjcore_ptr ptr, char *str_buf,
     str_buf[i * 2] = hex_chars[(byte >> 4) & 0x0F];
     str_buf[i * 2 + 1] = hex_chars[byte & 0x0F];
   }
-  str_buf[34] = '\0';
+  str_buf[LMJCORE_PTR_STRING_LEN] = '\0';
 
   return LMJCORE_SUCCESS;
 }
 
 // 字符串转指针
 int lmjcore_ptr_from_string(const char *str, lmjcore_ptr ptr_out) {
-  if (!str || !ptr_out || strlen(str) != 34) {
+  if (!str || !ptr_out || strlen(str) != LMJCORE_PTR_STRING_LEN) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
 

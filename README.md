@@ -75,10 +75,23 @@ brew install lmdb
 
 ```c
 #include "lmjcore.h"
+static int test_ptr_generator(void *ctx, uint8_t out[LMJCORE_PTR_LEN]) {
+  static uint64_t counter = 0;
+
+  out[0] = LMJCORE_OBJ; // 对象类型
+
+  // 使用大端序填充计数器
+  for (int i = 0; i < 8; i++) {
+    out[1 + i] = (counter >> (56 - i * 8)) & 0xFF;
+  }
+
+  counter++;
+  return LMJCORE_SUCCESS;
+}
 
 // 初始化环境（必须提供指针生成器）
 lmjcore_env* env;
-lmjcore_init("/data/lmjcore", 1024 * 1024 * 1024, 0, NULL, NULL, &env);
+lmjcore_init("/data/lmjcore", 1024 * 1024 * 1024, 0, test_ptr_generator, NULL, &env);
 
 // 创建写事务
 lmjcore_txn* txn;

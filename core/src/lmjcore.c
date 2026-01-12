@@ -1161,6 +1161,9 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
     }
     rc = mdb_cursor_get(cursor_main, &key, &value, MDB_NEXT);
   }
+  if (rc == MDB_NOTFOUND) {
+    rc = LMJCORE_SUCCESS;
+  }
 cleanup:
   if (cursor_arr) {
     mdb_cursor_close(cursor_arr);

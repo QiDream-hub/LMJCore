@@ -113,6 +113,8 @@ fn lmdbThrow(rc: c_int) Error!void {
 
 // === 类型定义 ===
 pub const Ptr = [c.LMJCORE_PTR_LEN]u8;
+pub const PtrLen = c.LMJCORE_PTR_LEN;
+pub const PtrSteingLen = c.LMJCORE_PTR_STRING_LEN;
 
 pub const EntityType = enum(u8) {
     obj = c.LMJCORE_OBJ,

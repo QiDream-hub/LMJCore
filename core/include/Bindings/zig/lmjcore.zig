@@ -432,14 +432,12 @@ pub fn txnAbort(txn: *Txn) void {
 }
 
 // 对象创建
-pub fn objCreate(txn: *Txn) !Ptr {
-    var ptr: Ptr = undefined;
+pub fn objCreate(txn: *Txn, ptr: *Ptr) !void {
     const rc = c.lmjcore_obj_create(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
-        mutPtrToC(&ptr),
+        mutPtrToC(ptr),
     );
     try throw(rc);
-    return ptr;
 }
 
 pub fn objRegister(txn: *Txn, ptr: *const Ptr) !void {

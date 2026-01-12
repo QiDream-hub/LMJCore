@@ -34,7 +34,8 @@ pub fn main() !void {
 
     var txn = try lmjcore.txnBegin(env, lmjcore.TxnType.write);
 
-    const obj = try lmjcore.objCreate(txn);
+    var obj: lmjcore.Ptr = undefined;
+    try lmjcore.objCreate(txn, &obj);
     try lmjcore.objMemberPut(txn, &obj, "name", "name");
     try lmjcore.objMemberPut(txn, &obj, "value", "value");
 

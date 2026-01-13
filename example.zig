@@ -30,9 +30,13 @@ fn zig_uuidv4_generator(_: ?*anyopaque, out: [*c]u8) callconv(.c) c_int {
 }
 
 pub fn main() !void {
-    const env = try lmjcore.init("./lmjcore_db/zig", 1024 * 1024 * 100, 0, zig_uuidv4_generator, null);
+    var env_raw: ?*lmjcore.Env = null;
+    try lmjcore.init("./lmjcore_db/zig", 1024 * 1024 * 100, 0, zig_uuidv4_generator, null, &env_raw);
+    const env: *lmjcore.Env = env_raw.?;
 
-    var txn = try lmjcore.txnBegin(env, lmjcore.TxnType.write);
+    var txn_raw: ?*lmjcore.Txn = null;
+    try lmjcore.txnBegin(env, lmjcore.TxnType.write, &txn_raw);
+    var txn: *lmjcore.Txn = txn_raw.?;
 
     var obj: lmjcore.Ptr = undefined;
     try lmjcore.objCreate(txn, &obj);
@@ -44,7 +48,8 @@ pub fn main() !void {
     std.debug.print("Object Write Success!\n", .{});
 
     // 开始只读事务
-    txn = try lmjcore.txnBegin(env, .readonly);
+    try lmjcore.txnBegin(env, .readonly, &txn_raw);
+    txn = txn_raw.?;
 
     var buffer: [4096]u8 align(@sizeOf(usize)) = undefined;
     const read_result = try lmjcore.readObject(txn, &obj, &buffer);
@@ -73,7 +78,8 @@ pub fn main() !void {
     lmjcore.txnAbort(txn);
 
     // 审计
-    txn = try lmjcore.txnBegin(env, .readonly);
+    try lmjcore.txnBegin(env, .readonly, &txn_raw);
+    txn = txn_raw.?;
 
     var auditBuffer: [4096]u8 align(@sizeOf(usize)) = undefined;
     const re = try lmjcore.auditObject(txn, &obj, &auditBuffer);

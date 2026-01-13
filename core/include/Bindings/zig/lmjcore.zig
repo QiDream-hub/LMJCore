@@ -389,19 +389,18 @@ pub fn init(
     flags: u32,
     ptr_gen: ?PtrGeneratorFn,
     ptr_gen_ctx: ?*anyopaque,
-) !*Env {
-    var env: ?*c.lmjcore_env = undefined;
+    env: *?*Env,
+) !void {
     const rc = c.lmjcore_init(
         path.ptr,
         map_size,
         flags,
         ptr_gen,
         ptr_gen_ctx,
-        &env,
+        env,
     );
     try throw(rc);
-    if (env == null) return error.UnexpectedNull;
-    return @as(*Env, @ptrCast(env.?));
+    if (env.* == null) return error.UnexpectedNull;
 }
 
 pub fn cleanup(env: *Env) !void {
@@ -409,17 +408,15 @@ pub fn cleanup(env: *Env) !void {
     try throw(rc);
 }
 
-pub fn txnBegin(env: *Env, typ: TxnType) !*Txn {
+pub fn txnBegin(env: *Env, typ: TxnType, txn: *?*Txn) !void {
     const c_type = @intFromEnum(typ);
-    var txn: ?*c.lmjcore_txn = undefined;
     const rc = c.lmjcore_txn_begin(
         @as(*c.lmjcore_env, @ptrCast(env)),
         c_type,
-        &txn,
+        txn,
     );
     try throw(rc);
-    if (txn == null) return error.UnexpectedNull;
-    return @as(*Txn, @ptrCast(txn.?));
+    if (txn.* == null) return error.UnexpectedNull;
 }
 
 pub fn txnCommit(txn: *Txn) !void {

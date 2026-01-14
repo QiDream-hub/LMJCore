@@ -384,7 +384,7 @@ pub fn auditObject(
 
 // === 核心 API 封装 ===
 pub fn init(
-    path: [:0]const u8,
+    path: []const u8,
     map_size: usize,
     flags: u32,
     ptr_gen: ?PtrGeneratorFn,

@@ -74,6 +74,10 @@ pub fn main() !void {
     const reMember = try lmjcore.readMembers(txn, &obj, &memberBuffer);
     reMember.debugPrint(&memberBuffer);
 
+    var value: [10]u8 align(@sizeOf(usize)) = undefined;
+    const result = try lmjcore.objMemberGet(txn, &obj, "name", &value);
+    std.debug.print("name = {s}\n", .{value[0..result]});
+
     // 提交只读事务
     lmjcore.txnAbort(txn);
 

@@ -387,7 +387,7 @@ pub fn init(
     path: []const u8,
     map_size: usize,
     flags: u32,
-    ptr_gen: ?PtrGeneratorFn,
+    ptr_gen: PtrGeneratorFn,
     ptr_gen_ctx: ?*anyopaque,
     env: *?*Env,
 ) !void {

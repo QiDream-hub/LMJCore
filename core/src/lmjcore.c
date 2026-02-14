@@ -758,7 +758,7 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
     return LMJCORE_ERROR_NULL_POINTER;
   }
   if (txn->is_read_only) {
-    return LMJCORE_ERROR_ENTITY_TYPE_MISMATCH;
+    return LMJCORE_ERROR_READONLY_TXN;
   }
   if (obj_ptr[0] != LMJCORE_OBJ) {
     return LMJCORE_ERROR_ENTITY_TYPE_MISMATCH;
@@ -777,7 +777,10 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   int rc = mdb_put(txn->mdb_txn, txn->env->arr_dbi, &arr_key, &arr_val,
                    MDB_NODUPDATA);
   // 有重复的值
-  if (rc == MDB_KEYEXIST || rc == MDB_SUCCESS) {
+  if (rc == MDB_KEYEXIST) {
+    rc = MDB_SUCCESS;
+  }
+  if (rc == MDB_SUCCESS) {
     // 构建主键：对象指针 + 成员名
     size_t key_size = LMJCORE_PTR_LEN + member_name_len;
     uint8_t key[key_size];
@@ -1032,7 +1035,7 @@ int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
 int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
                        const uint8_t *value, size_t value_len) {
   if (!txn || !arr_ptr || !value) {
-    return LMJCORE_ERROR_INVALID_PARAM;
+    return LMJCORE_ERROR_NULL_POINTER;
   }
   if (txn->is_read_only) {
     return LMJCORE_ERROR_READONLY_TXN;
@@ -1184,7 +1187,7 @@ int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
                              size_t *total_value_len_out,
                              size_t *element_count_out) {
   if (arr_ptr[0] != LMJCORE_ARR) {
-    return LMJCORE_ERROR_NULL_POINTER;
+    return LMJCORE_ERROR_ENTITY_TYPE_MISMATCH;
   }
   return arr_stat_values(txn, arr_ptr, total_value_len_out, element_count_out);
 }
@@ -1464,4 +1467,4 @@ int lmjcore_ptr_from_string(const char *str, lmjcore_ptr ptr_out) {
 }
 
 // 判断事务是否符合对应类型
-bool is_read_only(lmjcore_txn *txn) { return txn->is_read_only; }
+bool lmjcore_txn_is_read_only(lmjcore_txn *txn) { return txn->is_read_only; }

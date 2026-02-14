@@ -755,7 +755,7 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
  * @return true 是只读类型
  * @return false 不是只读类型
  */
-bool is_read_only(lmjcore_txn *txn);
+bool lmjcore_txn_is_read_only(lmjcore_txn *txn);
 
 #ifdef __cplusplus
 }

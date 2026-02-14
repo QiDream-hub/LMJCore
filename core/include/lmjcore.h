@@ -10,53 +10,228 @@
 extern "C" {
 #endif
 
-// 错误码定义
-#define LMJCORE_SUCCESS 0
-#define LMJCORE_ERROR_INVALID_PARAM -32000            // 参数无效
-#define LMJCORE_ERROR_MEMBER_TOO_LONG -32002          // 成员名长度超限
-#define LMJCORE_ERROR_INVALID_POINTER -32003          // 指针格式错误
-#define LMJCORE_ERROR_BUFFER_TOO_SMALL -32004         // 输出缓冲区空间不足
-#define LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED -32005 // 内存分配失败
-#define LMJCORE_ERROR_ENTITY_NOT_FOUND -32006         // 实体不存在
-#define LMJCORE_ERROR_MEMBER_NOT_FOUND -32007         // 成员不存在
-
-// 环境标志位（映射 LMDB 标志）
 /**
- * LMDB 环境标志位完整映射
- * 参考：https://lmdb.readthedocs.io/en/release/#environment-flags
+ * @brief 错误码定义
+ *
  */
+// 基础错误码范围：-32000 ~ -32999
 
-// 文件操作相关标志
-#define LMJCORE_FLAGS_FIXEDMAP MDB_FIXEDMAP // 使用固定内存映射
-#define LMJCORE_FLAGS_NOSUBDIR                                                 \
-  MDB_NOSUBDIR // 环境文件直接放在路径中，不创建子目录
-#define LMJCORE_FLAGS_NOSYNC                                                   \
-  MDB_NOSYNC // 不强制将数据同步到磁盘（写入后立即返回）
-#define LMJCORE_FLAGS_RDONLY MDB_RDONLY         // 以只读模式打开环境
-#define LMJCORE_FLAGS_NOMETASYNC MDB_NOMETASYNC // 不强制在提交后同步元数据
-#define LMJCORE_FLAGS_WRITEMAP MDB_WRITEMAP // 使用写时内存映射（提升写入性能）
-#define LMJCORE_FLAGS_MAPASYNC MDB_MAPASYNC // 在同步模式下使用异步回写
-#define LMJCORE_FLAGS_NOTLS MDB_NOTLS       // 禁用线程局部存储
+#define LMJCORE_SUCCESS 0
 
-// 数据库操作相关标志
-#define LMJCORE_FLAGS_NOLOCK MDB_NOLOCK       // 不使用任何锁（实验性）
-#define LMJCORE_FLAGS_NORDAHEAD MDB_NORDAHEAD // 禁用预读
-#define LMJCORE_FLAGS_NOMEMINIT                                                \
-  MDB_NOMEMINIT // 不初始化内存（提升性能，但有安全风险）
+// 参数相关 (-32000 ~ -32019)
+#define LMJCORE_ERROR_INVALID_PARAM -32000    // 通用参数无效
+#define LMJCORE_ERROR_NULL_POINTER -32001     // 空指针
+#define LMJCORE_ERROR_INVALID_POINTER -32003  // 指针格式错误
+#define LMJCORE_ERROR_MEMBER_TOO_LONG -32002  // 成员名长度超限
+#define LMJCORE_ERROR_BUFFER_TOO_SMALL -32004 // 输出缓冲区空间不足
 
-// 组合标志（常用配置模式）
-#define LMJCORE_FLAGS_SAFE_SYNC 0 // 安全同步模式（默认）
-#define LMJCORE_FLAGS_MAX_PERF                                                 \
-  (LMJCORE_FLAGS_WRITEMAP | LMJCORE_FLAGS_MAPASYNC)      // 最大性能模式
-#define LMJCORE_FLAGS_READONLY_MODE LMJCORE_FLAGS_RDONLY // 只读模式
-#define LMJCORE_FLAGS_NO_DISK_SYNC                                             \
-  (LMJCORE_FLAGS_NOSYNC | LMJCORE_FLAGS_NOMETASYNC) // 无磁盘同步模式
+// 事务相关 (-32020 ~ -32039)
+#define LMJCORE_ERROR_READONLY_TXN -32020    // 在只读事务中执行写操作
+#define LMJCORE_ERROR_READONLY_PARENT -32021 // 父事务是只读，不能开子事务
 
-// 兼容性标志（不同版本的 LMDB）
-#ifdef MDB_PREVSNAPSHOT
-#define LMJCORE_PREVSNAPSHOT MDB_PREVSNAPSHOT // 允许从先前快照读取
-#endif
+// 实体相关 (-32040 ~ -32059)
+#define LMJCORE_ERROR_ENTITY_NOT_FOUND -32040     // 实体不存在
+#define LMJCORE_ERROR_ENTITY_EXISTS -32041        // 实体已存在
+#define LMJCORE_ERROR_ENTITY_TYPE_MISMATCH -32042 // 实体类型不匹配
 
+// 成员相关 (-32060 ~ -32079)
+#define LMJCORE_ERROR_MEMBER_NOT_FOUND -32060 // 成员不存在
+#define LMJCORE_ERROR_MEMBER_EXISTS -32061    // 成员已存在
+#define LMJCORE_ERROR_MEMBER_MISSING -32062   // 成员缺失值
+
+// 资源相关 (-32080 ~ -32099)
+#define LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED -32080 // 内存分配失败
+
+// 审计相关 (-32100 ~ -32119)
+#define LMJCORE_ERROR_GHOST_MEMBER -32100 // 存在幽灵成员
+
+// ==================== 环境标志 ====================
+
+/**
+ * @def LMJCORE_ENV_NOSYNC
+ * @brief 不强制同步到磁盘（MDB_NOSYNC）
+ *
+ * 提交事务后不强制 fsync，由操作系统决定何时写盘。
+ * 提升性能，但系统崩溃可能丢失最近的事务。
+ */
+#define LMJCORE_ENV_NOSYNC MDB_NOSYNC
+
+/**
+ * @def LMJCORE_ENV_NOMETASYNC
+ * @brief 不同步元数据（MDB_NOMETASYNC）
+ *
+ * 提交事务时不同步元数据页，只同步数据页。
+ * 配合 MDB_NOSYNC 使用可进一步提升性能。
+ */
+#define LMJCORE_ENV_NOMETASYNC MDB_NOMETASYNC
+
+/**
+ * @def LMJCORE_ENV_WRITEMAP
+ * @brief 使用可写内存映射（MDB_WRITEMAP）
+ *
+ * 直接写入内存映射文件，减少数据拷贝，大幅提升写入性能。
+ * 需配合 MDB_MAPASYNC 使用以避免数据损坏风险。
+ */
+#define LMJCORE_ENV_WRITEMAP MDB_WRITEMAP
+
+/**
+ * @def LMJCORE_ENV_MAPASYNC
+ * @brief 异步内存同步（MDB_MAPASYNC）
+ *
+ * 使用 MDB_WRITEMAP 时，以异步方式将修改写回磁盘。
+ * 进一步提升性能，但系统崩溃可能丢失最近写入。
+ */
+#define LMJCORE_ENV_MAPASYNC MDB_MAPASYNC
+
+/**
+ * @def LMJCORE_ENV_NOLOCK
+ * @brief 无锁模式（MDB_NOLOCK）
+ *
+ * 禁用 LMDB 内部锁机制，调用者必须自行管理并发访问。
+ * 适用于单进程访问或外部已有锁机制的场景。
+ */
+#define LMJCORE_ENV_NOLOCK MDB_NOLOCK
+
+/**
+ * @def LMJCORE_ENV_NOTLS
+ * @brief 禁用线程局部存储（MDB_NOTLS）
+ *
+ * 不将读事务槽位绑定到线程，允许在一个线程中开启事务，
+ * 在另一个线程中提交/中止。用于特定的线程模型。
+ */
+#define LMJCORE_ENV_NOTLS MDB_NOTLS
+
+/**
+ * @def LMJCORE_ENV_NORDAHEAD
+ * @brief 禁用预读（MDB_NORDAHEAD）
+ *
+ * 关闭 LMDB 的文件预读功能，适用于随机访问模式。
+ * 在 Windows 上无效果。
+ */
+#define LMJCORE_ENV_NORDAHEAD MDB_NORDAHEAD
+
+/**
+ * @def LMJCORE_ENV_NOMEMINIT
+ * @brief 不初始化内存（MDB_NOMEMINIT）
+ *
+ * 分配内存时不初始化为零，可提升性能但有安全风险。
+ * 仅当确信不会读取未初始化的数据时使用。
+ */
+#define LMJCORE_ENV_NOMEMINIT MDB_NOMEMINIT
+
+/**
+ * @def LMJCORE_ENV_FIXEDMAP
+ * @brief 固定内存映射地址（MDB_FIXEDMAP）
+ *
+ * 尝试在固定地址进行内存映射，实验性功能。
+ * 通常不需要使用。
+ */
+#define LMJCORE_ENV_FIXEDMAP MDB_FIXEDMAP
+
+/**
+ * @def LMJCORE_ENV_NOSUBDIR
+ * @brief 不创建子目录（MDB_NOSUBDIR）
+ *
+ * 直接在指定路径创建数据文件，而不是在 path/data.mdb。
+ * 适用于嵌入式场景。
+ */
+#define LMJCORE_ENV_NOSUBDIR MDB_NOSUBDIR
+
+/**
+ * @def LMJCORE_ENV_READONLY
+ * @brief 只读模式（MDB_RDONLY）
+ *
+ * 以只读方式打开环境，不允许任何写入操作。
+ * 可用于多进程共享读。
+ */
+#define LMJCORE_ENV_READONLY MDB_RDONLY
+
+// ==================== 事务标志 ====================
+
+/**
+ * @def LMJCORE_TXN_READONLY
+ * @brief 只读事务（MDB_RDONLY）
+ *
+ * 事务只能执行读取操作，任何写入尝试都会失败。
+ * 只读事务可以并发执行，不会阻塞写事务。
+ */
+#define LMJCORE_TXN_READONLY MDB_RDONLY
+
+/**
+ * @def LMJCORE_TXN_NOSYNC
+ * @brief 事务级不强制同步（MDB_NOSYNC）
+ *
+ * 覆盖环境设置，当前事务提交时不强制 fsync。
+ * 用于特定事务的性能优化。
+ */
+#define LMJCORE_TXN_NOSYNC MDB_NOSYNC
+
+/**
+ * @def LMJCORE_TXN_NOMETASYNC
+ * @brief 事务级元数据异步（MDB_NOMETASYNC）
+ *
+ * 覆盖环境设置，当前事务提交时不同步元数据。
+ */
+#define LMJCORE_TXN_NOMETASYNC MDB_NOMETASYNC
+
+/**
+ * @def LMJCORE_TXN_MAPASYNC
+ * @brief 事务级异步映射（MDB_MAPASYNC）
+ *
+ * 覆盖环境设置，当前事务使用异步内存同步。
+ */
+#define LMJCORE_TXN_MAPASYNC MDB_MAPASYNC
+
+/**
+ * @def LMJCORE_TXN_NOTLS
+ * @brief 事务级禁用 TLS（MDB_NOTLS）
+ *
+ * 覆盖环境设置，当前事务不绑定到线程。
+ */
+#define LMJCORE_TXN_NOTLS MDB_NOTLS
+
+// ==================== 便捷组合 ====================
+
+/**
+ * @def LMJCORE_ENV_MAX_PERF
+ * @brief 最大性能配置
+ *
+ * 组合所有性能优化标志，提供极致写入性能。
+ * 警告：系统崩溃可能丢失数据！
+ */
+#define LMJCORE_ENV_MAX_PERF                                                   \
+  (LMJCORE_ENV_WRITEMAP | LMJCORE_ENV_MAPASYNC | LMJCORE_ENV_NOSYNC |          \
+   LMJCORE_ENV_NOMETASYNC)
+
+/**
+ * @def LMJCORE_ENV_SAFE
+ * @brief 安全模式（默认）
+ *
+ * 不添加任何性能优化标志，保证最高级别的数据安全。
+ * 每个事务提交都会强制刷盘。
+ */
+#define LMJCORE_ENV_SAFE 0
+
+/**
+ * @def LMJCORE_TXN_HIGH_PERF
+ * @brief 事务高性能模式
+ *
+ * 为当前事务启用性能优化，牺牲持久性换取速度。
+ */
+#define LMJCORE_TXN_HIGH_PERF (LMJCORE_TXN_NOSYNC | LMJCORE_TXN_NOMETASYNC)
+
+/**
+ * @def LMJCORE_TXN_DEFAULT
+ * @brief 默认事务（0标志）
+ *
+ * 遵循环境设置的事务行为。
+ */
+#define LMJCORE_TXN_DEFAULT 0
+
+/**
+ * @brief lmjcore常量定义
+ *
+ */
 // 固定容量的错误报告上限
 #define LMJCORE_MAX_READ_ERRORS 8
 
@@ -77,19 +252,6 @@ typedef enum {
   LMJCORE_ARR = 0x02, // 数组类型
 } lmjcore_entity_type;
 
-// 事务类型枚举
-typedef enum {
-  LMJCORE_TXN_READONLY = 0, // 只读事务
-  LMJCORE_TXN_WRITE = 1,    // 读写事务
-} lmjcore_txn_type;
-
-// 读取错误代码枚举
-typedef enum {
-  LMJCORE_READERR_NONE = 0,
-  LMJCORE_READERR_ENTITY_NOT_FOUND = 1, // 目标实体不存在
-  LMJCORE_READERR_MEMBER_MISSING,       // 对象成员值缺失
-} lmjcore_read_error_code;
-
 // 17字节实体指针类型
 typedef uint8_t lmjcore_ptr[LMJCORE_PTR_LEN];
 
@@ -105,7 +267,7 @@ typedef int (*lmjcore_ptr_generator_fn)(void *ctx,
 
 // 读取错误详情结构
 typedef struct {
-  lmjcore_read_error_code code; // 错误码
+  unsigned int error_code; // 错误码
   struct {
     size_t element_offset; // 成员名或数组元素在缓冲区中的偏移量
     size_t element_len;    // 成员名或数组元素长度
@@ -184,14 +346,19 @@ int lmjcore_cleanup(lmjcore_env *env);
 // ==================== 事务管理 ====================
 
 /**
- * @brief 开启一个新事务
+ * @brief 开启事务
+ * @param env 环境句柄
+ * @param parent 父事务（可为 NULL）
+ * @param flags 事务标志（LMJCORE_TXN_* 组合）
+ * @param txn 输出事务句柄
+ * @return 错误码
  *
- * @param env 已初始化的环境句柄
- * @param type 事务类型（只读或删写改）
- * @param txn 输出参数，返回创建的事务句柄
- * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ * @note 父子事务规则：
+ *       - 写事务可开启任意子事务（读/写）
+ *       - 只读事务不能开启任何子事务
+ *       - parent = NULL 表示顶级事务
  */
-int lmjcore_txn_begin(lmjcore_env *env, lmjcore_txn_type type,
+int lmjcore_txn_begin(lmjcore_env *env, lmjcore_txn *parent, unsigned int flags,
                       lmjcore_txn **txn);
 
 /**
@@ -585,11 +752,10 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
  * @brief 判断事务的类型
  *
  * @param txn 事务句柄
- * @param type 待比较的事务类型
- * @return true 事务类型匹配
- * @return false 事务类型不匹配或句柄无效
+ * @return true 是只读类型
+ * @return false 不是只读类型
  */
-bool is_txn_type(lmjcore_txn *txn, lmjcore_txn_type type);
+bool lmjcore_txn_is_read_only(lmjcore_txn *txn);
 
 #ifdef __cplusplus
 }

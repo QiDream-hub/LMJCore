@@ -21,6 +21,9 @@ STRESS_TEST_SRC = LMJCore_tests/stressTest.c
 AUDIT_TEST_SRC = LMJCore_tests/ghostMember.c
 API_TEST_SRC = LMJCore_tests/APITest.c
 
+#特性测试程序
+TEST = test.c
+
 # 测试二进制文件路径
 TEST_BIN ?= $(BUILD_DIR)/bin
 
@@ -32,12 +35,19 @@ TEST_TARGETS = \
 	$(TEST_BIN)/stressTest \
 	$(TEST_BIN)/APITest \
 	$(TEST_BIN)/ghostTest \
+	$(TEST_BIN)/test\
 	$(TEST_BIN)/ptr_uuid_gen
 
 
 # 默认目标
 .PHONY: all
 all: $(TEST_TARGETS)
+
+#特性测试
+$(TEST_BIN)/test: $(TEST) | $(BUILD_DIR)/liblmjconfig.so
+	@mkdir -p $(TEST_BIN)
+	$(CC) $(CFLAGS) -o $@ $< $(BASE_LDFLAGS) -llmjcore -llmjuuidgen
+	@echo "Built test"
 
 #构建指针生成器(依赖UUIDV4指针生成包)
 $(TEST_BIN)/ptr_uuid_gen: $(PTR_UUID_GEN_SRC) | $(BUILD_DIR)/liblmjconfig.so

@@ -27,7 +27,7 @@ LMJCore 的全部数据存储在两个 LMDB 数据库中：
 1. 生成对象指针 `ptr_obj = 01...`（17 字节）
 2. 在 `arr` 中注册成员名（顺序无关）：
 
-  ```text
+   ```text
    arr[ptr_obj] → "age"
    arr[ptr_obj] → "name"
    ```
@@ -35,7 +35,7 @@ LMJCore 的全部数据存储在两个 LMDB 数据库中：
 → LMDB 内部会按 `"age" < "name"` 排序存储，但这**不影响语义**
 1. 在 `main` 中存储具体值：
 
-  ```text
+   ```text
    main[ptr_obj + "name"] → "Alice"
    main[ptr_obj + "age"]  → 30（二进制编码）
    ```
@@ -72,13 +72,13 @@ main（命名格子区）：
 1. 生成数组指针 `ptr_arr = 02...`
 2. 在 `arr` 中写入元素：
 
-  ```text
+   ```text
    arr[ptr_arr] → "banana"
    arr[ptr_arr] → "apple"
    ```
 
 1. **LMDB 自动按 Value 字典序排序**，实际存储为：
-  ```text
+   ```text
    arr[ptr_arr] → "apple"
    arr[ptr_arr] → "banana"
    ```

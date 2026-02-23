@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-int main() {
+int test1() {
   MDB_env *env = NULL;
   MDB_txn *txn = NULL;
   MDB_dbi db;
@@ -71,5 +71,12 @@ int main() {
   mdb_dbi_close(env, db);
   mdb_env_close(env);
 
+  return 0;
+}
+
+void test2() { printf("%s", mdb_strerror(9999)); }
+
+int main() {
+  test2();
   return 0;
 }

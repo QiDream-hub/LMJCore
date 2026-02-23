@@ -33,6 +33,64 @@ struct lmjcore_txn {
   bool is_read_only;
 };
 
+typedef struct {
+  int code;
+  const char *message;
+} LmjCoreErrorEntry;
+
+/*
+ *==========================================
+ * 错误描述常量
+ *==========================================
+ */
+// 使用英文描述填充数组
+static const LmjCoreErrorEntry error_entries[] = {
+    {LMJCORE_SUCCESS, "Success"},
+
+    // Parameter Errors
+    {LMJCORE_ERROR_INVALID_PARAM, "Invalid parameter"},
+    {LMJCORE_ERROR_NULL_POINTER, "Null pointer"},
+    {LMJCORE_ERROR_MEMBER_TOO_LONG, "Member name too long"},
+    {LMJCORE_ERROR_INVALID_POINTER, "Invalid pointer format"},
+    {LMJCORE_ERROR_BUFFER_TOO_SMALL, "Output buffer too small"},
+
+    // Transaction Errors
+    {LMJCORE_ERROR_READONLY_TXN, "Write operation in read-only transaction"},
+    {LMJCORE_ERROR_READONLY_PARENT,
+     "Parent transaction is read-only, cannot create sub-transaction"},
+
+    // Entity Errors
+    {LMJCORE_ERROR_ENTITY_NOT_FOUND, "Entity not found"},
+    {LMJCORE_ERROR_ENTITY_EXISTS, "Entity already exists"},
+    {LMJCORE_ERROR_ENTITY_TYPE_MISMATCH, "Entity type mismatch"},
+
+    // Member Errors
+    {LMJCORE_ERROR_MEMBER_NOT_FOUND, "Member not found"},
+    {LMJCORE_ERROR_MEMBER_EXISTS, "Member already exists"},
+    {LMJCORE_ERROR_MEMBER_MISSING, "Member value missing"},
+
+    // Resource Errors
+    {LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED, "Memory allocation failed"},
+
+    // Audit Errors
+    {LMJCORE_ERROR_GHOST_MEMBER, "Ghost member exists"},
+};
+
+#define ERROR_ENTRY_COUNT (sizeof(error_entries) / sizeof(error_entries[0]))
+
+// ============================================================
+// 错误码转换函数
+// ============================================================
+
+const char *lmjcore_strerror(int error_code) {
+  for (int i = 0; i < ERROR_ENTRY_COUNT; i++) {
+    if (error_entries[i].code == error_code) {
+      return error_entries[i].message;
+    }
+  }
+  return mdb_strerror(error_code);
+}
+
 /*
  *==========================================
  * 内部工具函数

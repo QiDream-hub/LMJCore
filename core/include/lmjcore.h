@@ -10,10 +10,7 @@
 extern "C" {
 #endif
 
-/**
- * @brief 错误码定义
- *
- */
+// ==================== 错误码定义 ====================
 // 基础错误码范围：-32000 ~ -32999
 
 #define LMJCORE_SUCCESS 0
@@ -228,10 +225,7 @@ extern "C" {
  */
 #define LMJCORE_TXN_DEFAULT 0
 
-/**
- * @brief lmjcore常量定义
- *
- */
+// ==================== lmjcore常量定义 ====================
 // 固定容量的错误报告上限
 #define LMJCORE_MAX_READ_ERRORS 8
 
@@ -746,7 +740,7 @@ int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
                           size_t report_buf_size, lmjcore_audit_report *report);
 
-// ==================== 类型判断工具 ====================
+// ==================== 工具 ====================
 
 /**
  * @brief 判断事务的类型
@@ -756,6 +750,14 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
  * @return false 不是只读类型
  */
 bool lmjcore_txn_is_read_only(lmjcore_txn *txn);
+
+/**
+ * @brief 将错误代码转换为字符串
+ *
+ * @param error_code 错误代码
+ * @return const char*
+ */
+const char *lmjcore_strerror(int error_code);
 
 #ifdef __cplusplus
 }

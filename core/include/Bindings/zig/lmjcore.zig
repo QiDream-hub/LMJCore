@@ -138,6 +138,134 @@ fn lmdbThrow(rc: c_int) Error!void {
     };
 }
 
+// ==========================================
+// 1. 环境标志 (EnvFlags) 绑定
+// ==========================================
+/// 对应 lmjcore_env 的 flags
+/// 参考 lmjcore.h 中的 #define LMJCORE_ENV_*
+pub const EnvFlags = struct {
+    fixedmap: bool = false,
+    nosubdir: bool = false,
+    nosync: bool = false,
+    readonly: bool = false, // MDB_RDONLY for env
+    nometasync: bool = false,
+    writemap: bool = false,
+    mapasync: bool = false,
+    notls: bool = false,
+    nolock: bool = false,
+    noreadhead: bool = false,
+    nomeminit: bool = false,
+
+    /// 将 Zig 结构体转换为 C 期望的整数 (OR 操作)
+    pub fn toInt(self: EnvFlags) c_uint {
+        var result: c_uint = 0;
+
+        // 使用 lmjcore 映射后的宏进行位或
+        if (self.fixedmap) result |= c.LMJCORE_ENV_FIXEDMAP;
+        if (self.nosubdir) result |= c.LMJCORE_ENV_NOSUBDIR;
+        if (self.nosync) result |= c.LMJCORE_ENV_NOSYNC;
+        if (self.readonly) result |= c.LMJCORE_ENV_READONLY; // 注意：环境也有只读标志
+        if (self.nometasync) result |= c.LMJCORE_ENV_NOMETASYNC;
+        if (self.writemap) result |= c.LMJCORE_ENV_WRITEMAP;
+        if (self.mapasync) result |= c.LMJCORE_ENV_MAPASYNC;
+        if (self.notls) result |= c.LMJCORE_ENV_NOTLS;
+        if (self.nolock) result |= c.LMJCORE_ENV_NOLOCK;
+        if (self.noreadhead) result |= c.LMJCORE_ENV_NORDAHEAD;
+        if (self.nomeminit) result |= c.LMJCORE_ENV_NOMEMINIT;
+
+        return result;
+    }
+
+    /// 从 C 返回的整数解析回 Zig 结构体
+    pub fn fromInt(value: c_uint) EnvFlags {
+        return EnvFlags{
+            .fixedmap = (value & c.LMJCORE_ENV_FIXEDMAP) != 0,
+            .nosubdir = (value & c.LMJCORE_ENV_NOSUBDIR) != 0,
+            .nosync = (value & c.LMJCORE_ENV_NOSYNC) != 0,
+            .readonly = (value & c.LMJCORE_ENV_READONLY) != 0,
+            .nometasync = (value & c.LMJCORE_ENV_NOMETASYNC) != 0,
+            .writemap = (value & c.LMJCORE_ENV_WRITEMAP) != 0,
+            .mapasync = (value & c.LMJCORE_ENV_MAPASYNC) != 0,
+            .notls = (value & c.LMJCORE_ENV_NOTLS) != 0,
+            .nolock = (value & c.LMJCORE_ENV_NOLOCK) != 0,
+            .noreadhead = (value & c.LMJCORE_ENV_NORDAHEAD) != 0,
+            .nomeminit = (value & c.LMJCORE_ENV_NOMEMINIT) != 0,
+        };
+    }
+};
+
+// ==========================================
+// 2. 事务标志 (TxnFlags) 绑定
+// ==========================================
+/// 对应 lmjcore_txn_begin 的 flags
+/// 参考 lmjcore.h 中的 #define LMJCORE_TXN_*
+pub const TxnFlags = struct {
+    readonly: bool = false,
+    nosync: bool = false,
+    nometasync: bool = false,
+    mapasync: bool = false,
+    notls: bool = false,
+
+    /// 将 Zig 结构体转换为 C 期望的整数
+    pub fn toInt(self: TxnFlags) c_uint {
+        var result: c_uint = 0;
+
+        // 使用 lmjcore 映射后的宏进行位或
+        if (self.readonly) result |= c.LMJCORE_TXN_READONLY;
+        if (self.nosync) result |= c.LMJCORE_TXN_NOSYNC;
+        if (self.nometasync) result |= c.LMJCORE_TXN_NOMETASYNC;
+        if (self.mapasync) result |= c.LMJCORE_TXN_MAPASYNC;
+        if (self.notls) result |= c.LMJCORE_TXN_NOTLS;
+
+        return result;
+    }
+
+    /// 从 C 返回的整数解析回 Zig 结构体
+    pub fn fromInt(value: c_uint) TxnFlags {
+        return TxnFlags{
+            .readonly = (value & c.LMJCORE_TXN_READONLY) != 0,
+            .nosync = (value & c.LMJCORE_TXN_NOSYNC) != 0,
+            .nometasync = (value & c.LMJCORE_TXN_NOMETASYNC) != 0,
+            .mapasync = (value & c.LMJCORE_TXN_MAPASYNC) != 0,
+            .notls = (value & c.LMJCORE_TXN_NOTLS) != 0,
+        };
+    }
+};
+
+// ==========================================
+// 3. 便捷常量 (Presets)
+// ==========================================
+/// 预设的常用组合，直接对应 lmjcore.h 中的宏定义
+pub const EnvPresets = struct {
+    /// 最大性能配置 (WRITEMAP | MAPASYNC | NOSYNC | NOMETASYNC)
+    pub const MAX_PERF = EnvFlags{
+        .writemap = true,
+        .mapasync = true,
+        .nosync = true,
+        .nometasync = true,
+    };
+
+    /// 安全模式 (0)
+    pub const SAFE = EnvFlags{};
+
+    /// 无锁模式
+    pub const NOLOCK = EnvFlags{ .nolock = true };
+};
+
+pub const TxnPresets = struct {
+    /// 默认事务 (0)
+    pub const DEFAULT = TxnFlags{};
+
+    /// 高性能事务 (不强制刷盘)
+    pub const HIGH_PERF = TxnFlags{
+        .nosync = true,
+        .nometasync = true,
+    };
+
+    /// 只读事务
+    pub const READONLY = TxnFlags{ .readonly = true };
+};
+
 // === 类型定义 ===
 pub const Ptr = [c.LMJCORE_PTR_LEN]u8;
 pub const PtrLen = c.LMJCORE_PTR_LEN;
@@ -146,11 +274,6 @@ pub const PtrSteingLen = c.LMJCORE_PTR_STRING_LEN;
 pub const EntityType = enum(u8) {
     obj = c.LMJCORE_OBJ,
     arr = c.LMJCORE_ARR,
-};
-
-pub const TxnType = enum(c.lmjcore_txn_type) {
-    readonly = c.LMJCORE_TXN_READONLY,
-    write = c.LMJCORE_TXN_WRITE,
 };
 
 pub const ReadErrorCode = enum(c.lmjcore_read_error_code) {
@@ -413,7 +536,7 @@ pub fn auditObject(
 pub fn init(
     path: []const u8,
     map_size: usize,
-    flags: u32,
+    flags: EnvFlags,
     ptr_gen: PtrGeneratorFn,
     ptr_gen_ctx: ?*anyopaque,
     env: *?*Env,
@@ -421,7 +544,7 @@ pub fn init(
     const rc = c.lmjcore_init(
         path.ptr,
         map_size,
-        flags,
+        flags.toInt(),
         ptr_gen,
         ptr_gen_ctx,
         env,
@@ -435,12 +558,12 @@ pub fn cleanup(env: *Env) !void {
     try throw(rc);
 }
 
-pub fn txnBegin(env: *Env, typ: TxnType, txn: *?*Txn) !void {
-    const c_type = @intFromEnum(typ);
+pub fn txnBegin(env: *Env, parent: ?*Txn, flags: TxnFlags, txn: *?*Txn) !void {
     const rc = c.lmjcore_txn_begin(
         @as(*c.lmjcore_env, @ptrCast(env)),
-        c_type,
-        txn,
+        @as(?*c.lmjcore_txn, @ptrCast(parent)),
+        flags.toInt(),
+        @as(*?*c.lmjcore_txn, @ptrCast(txn)),
     );
     try throw(rc);
     if (txn.* == null) return error.UnexpectedNull;

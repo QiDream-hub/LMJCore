@@ -276,12 +276,6 @@ pub const EntityType = enum(u8) {
     arr = c.LMJCORE_ARR,
 };
 
-pub const ReadErrorCode = enum(c.lmjcore_read_error_code) {
-    none = c.LMJCORE_READERR_NONE,
-    entity_not_found = c.LMJCORE_READERR_ENTITY_NOT_FOUND,
-    member_missing = c.LMJCORE_READERR_MEMBER_MISSING,
-};
-
 // === 句柄类型（opaque）===
 pub const Env = opaque {};
 pub const Txn = opaque {};
@@ -317,12 +311,16 @@ pub const MemberDescriptor = extern struct {
 };
 
 pub const ReadError = extern struct {
-    code: ReadErrorCode,
+    code: c_int,
     element: extern struct {
         element_offset: usize,
         element_len: usize,
     },
     entity_ptr: Ptr,
+
+    pub fn getError(self: ReadError) !Error {
+        return throw(self.code);
+    }
 };
 
 pub const AuditDescriptor = extern struct {
@@ -720,15 +718,16 @@ pub fn objStatMebers(
 }
 
 // 指针转换工具
-pub fn ptrToString(ptr: *const Ptr, allocator: std.mem.Allocator) ![:0]const u8 {
+pub fn ptrToString(
+    ptr: *const Ptr,
+    buffer: []align(@sizeOf(usize)) u8,
+) !void {
     // 34字符HEX + 空终止符
-    const str = try allocator.alloc(u8, 35);
-    const rc = c.lmjcore_ptr_to_string(ptrToC(ptr), str.ptr, str.len);
+    const rc = c.lmjcore_ptr_to_string(ptrToC(ptr), buffer.ptr, buffer.len);
     try throw(rc);
-    return str[0..34 :0];
 }
 
-pub fn ptrFromString(str: [:0]const u8) !Ptr {
+pub fn ptrFromString(str: *[:0]align(usize) const u8) !Ptr {
     var ptr: Ptr = undefined;
     const rc = c.lmjcore_ptr_from_string(str.ptr, mutPtrToC(&ptr));
     try throw(rc);

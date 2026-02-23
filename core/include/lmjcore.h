@@ -261,7 +261,7 @@ typedef int (*lmjcore_ptr_generator_fn)(void *ctx,
 
 // 读取错误详情结构
 typedef struct {
-  unsigned int error_code; // 错误码
+  int error_code; // 错误码
   struct {
     size_t element_offset; // 成员名或数组元素在缓冲区中的偏移量
     size_t element_len;    // 成员名或数组元素长度

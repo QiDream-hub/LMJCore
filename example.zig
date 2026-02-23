@@ -1,94 +1,98 @@
 const std = @import("std");
-const lmjcore = @import("lmjcore");
+const lmj = @import("lmjcore"); // 确保这个路径能正确找到你的绑定文件
 
-// Zig 实现的 UUIDv4 生成器 - 与修正后的绑定匹配
-fn zig_uuidv4_generator(_: ?*anyopaque, out: [*c]u8) callconv(.c) c_int {
-    // 假设 LMJCORE_PTR_LEN 是 17（根据你之前的 C 代码）
-    // 第一个字节通常是 0，然后是 16 字节 UUID
+// ==========================================
+// 指针生成器回调函数
+// ==========================================
+// LMJCore 需要一个函数来生成 ID (Ptr)。
+// 使用随机数生成 UUID 格式的 ID
+fn ptrGenerator(ctx: ?*anyopaque, out: [*c]u8) callconv(.c) c_int {
+    _ = ctx;
 
-    // 将 [*c]u8 转换为切片以便操作
-    const out_slice = out[0..17];
+    // 创建随机数生成器
+    var prng = std.Random.DefaultPrng.init(@as(u64, @intCast(std.time.timestamp())));
+    const random = prng.random();
 
-    // 设置第一个字节为 0（根据你之前的 C 代码）
-    out_slice[0] = 0;
-
-    // UUID 部分从索引 1 开始
-    const uuid_slice = out_slice[1..];
-
-    // 生成 16 字节随机数据
-    std.crypto.random.bytes(uuid_slice);
-
-    // 设置 UUIDv4 版本位（第 7 字节高 4 位 = 0100）
-    // 注意：在 16 字节 UUID 中，这是偏移量 6
-    uuid_slice[6] = (uuid_slice[6] & 0x0F) | 0x40;
-
-    // 设置 variant 位（第 9 字节高 2 位 = 10xx）
-    // 注意：在 16 字节 UUID 中，这是偏移量 8
-    uuid_slice[8] = (uuid_slice[8] & 0x3F) | 0x80;
+    // 填充随机字节
+    for (1..lmj.PtrLen) |i| {
+        out[i] = random.int(u8);
+    }
 
     return 0; // LMJCORE_SUCCESS
 }
 
+// ==========================================
+// 主程序
+// ==========================================
 pub fn main() !void {
-    var env_raw: ?*lmjcore.Env = null;
-    try lmjcore.init("./lmjcore_db/zig", 1024 * 1024 * 100, 0, zig_uuidv4_generator, null, &env_raw);
-    const env: *lmjcore.Env = env_raw.?;
+    var env: ?*lmj.Env = null;
+    var txn: ?*lmj.Txn = null;
 
-    var txn_raw: ?*lmjcore.Txn = null;
-    try lmjcore.txnBegin(env, lmjcore.TxnType.write, &txn_raw);
-    var txn: *lmjcore.Txn = txn_raw.?;
+    std.debug.print("🚀 开始 LMJCore 简单示例\n", .{});
 
-    var obj: lmjcore.Ptr = undefined;
-    try lmjcore.objCreate(txn, &obj);
-    try lmjcore.objMemberPut(txn, &obj, "name", "name");
-    try lmjcore.objMemberPut(txn, &obj, "value", "value");
+    // 1. 初始化环境
+    // 使用 SAFE 预设，数据存储在 "./lmjcore_db" 目录
+    try lmj.init(
+        "./lmjcore_db", // 路径
+        1024 * 1024, // 1MB 映射大小 (测试用，实际需更大)
+        lmj.EnvPresets.SAFE, // 标志位
+        ptrGenerator, // 指针生成器
+        null, // 上下文
+        &env, // 输出环境句柄
+    );
+    std.debug.print("✅ 环境初始化完成\n", .{});
 
-    try lmjcore.txnCommit(txn);
+    // 2. 开启写事务
+    try lmj.txnBegin(env.?, null, lmj.TxnPresets.DEFAULT, &txn);
+    std.debug.print("✅ 写事务开启\n", .{});
 
-    std.debug.print("Object Write Success!\n", .{});
+    // 3. 创建一个新对象 (实体)
+    var newObjPtr: lmj.Ptr = undefined;
+    try lmj.objCreate(txn.?, &newObjPtr);
+    var ptrStr: [35]u8 align(@alignOf(usize)) = undefined;
+    try lmj.ptrToString(&newObjPtr, &ptrStr);
+    const ptrStrSpils = ptrStr[0..ptrStr.len];
+    std.debug.print("✅ 对象创建成功, Ptr: {s}\n", .{ptrStrSpils.*});
+    // 如果你想打印 Ptr，可以使用 lmj.ptrToString (需要 Allocator)
 
-    // 开始只读事务
-    try lmjcore.txnBegin(env, .readonly, &txn_raw);
-    txn = txn_raw.?;
+    // 4. 给对象添加成员 (Key-Value)
+    try lmj.objMemberPut(txn.?, &newObjPtr, "name", "Alice");
+    try lmj.objMemberPut(txn.?, &newObjPtr, "age", "30");
+    std.debug.print("✅ 成员 'name' 和 'age' 写入完成\n", .{});
 
-    var buffer: [4096]u8 align(@sizeOf(usize)) = undefined;
-    const read_result = try lmjcore.readObject(txn, &obj, &buffer);
+    // 5. 提交事务 (保存更改)
+    try lmj.txnCommit(txn.?);
+    txn = null; // 提交后事务指针失效
+    std.debug.print("✅ 事务提交成功\n", .{});
 
-    // 获取所有成员
-    const members = read_result.getMembers();
+    // ==========================================
+    // 6. 读取验证 (开启一个新的只读事务)
+    // ==========================================
+    try lmj.txnBegin(env.?, null, lmj.TxnPresets.READONLY, &txn);
+    std.debug.print("✅ 读事务开启\n", .{});
 
-    // 遍历并打印每个成员
-    for (members) |member| {
-        const name = member.getName(&buffer);
-        const value = member.getValue(&buffer);
+    // 分配一个缓冲区用于存放读取结果
+    // LMJCore 使用“零拷贝”设计，需要传入一个大缓冲区
+    var buffer: [512]u8 align(@alignOf(usize)) = undefined; // 注意对齐
 
-        std.debug.print("Member: {s} = {s}\n", .{ name, value });
+    // 尝试读取对象
+    const result = try lmj.readObject(txn.?, &newObjPtr, &buffer);
+    std.debug.print("✅ 读取对象成功, 包含成员数: {d}\n", .{result.member_count});
+
+    // 遍历并打印成员 (需要传入 buffer 来解析实际数据)
+    for (result.getMembers()) |member_desc| {
+        const name = member_desc.getName(buffer[0..]);
+        const value = member_desc.getValue(buffer[0..]);
+        std.debug.print("   -> {s}: {s}\n", .{ name, value });
     }
 
-    // 也可以检查是否有错误
-    if (read_result.error_count > 0) {
-        std.debug.print("Warning: {d} read errors occurred\n", .{read_result.error_count});
-    }
+    // 7. 结束读事务
+    try lmj.txnCommit(txn.?);
+    std.debug.print("✅ 读事务提交\n", .{});
 
-    var memberBuffer: [2048]u8 align(@sizeOf(usize)) = undefined;
-    const reMember = try lmjcore.readMembers(txn, &obj, &memberBuffer);
-    reMember.debugPrint(&memberBuffer);
+    // 8. 清理环境
+    try lmj.cleanup(env.?);
+    std.debug.print("✅ 环境清理完成\n", .{});
 
-    var value: [10]u8 align(@sizeOf(usize)) = undefined;
-    const result = try lmjcore.objMemberGet(txn, &obj, "name", &value);
-    std.debug.print("name = {s}\n", .{value[0..result]});
-
-    // 提交只读事务
-    lmjcore.txnAbort(txn);
-
-    // 审计
-    try lmjcore.txnBegin(env, .readonly, &txn_raw);
-    txn = txn_raw.?;
-
-    var auditBuffer: [4096]u8 align(@sizeOf(usize)) = undefined;
-    const re = try lmjcore.auditObject(txn, &obj, &auditBuffer);
-    re.debugPrint();
-
-    lmjcore.txnAbort(txn);
-    try lmjcore.cleanup(env);
+    std.debug.print("\n🎉 示例程序运行结束\n", .{});
 }

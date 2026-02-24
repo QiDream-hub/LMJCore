@@ -93,8 +93,10 @@ fn mapLmjcoreError(rc: c_int) ?Error {
 
 // 全局错误转换函数（先试 LMJCore，再试 LMDB）
 pub fn throw(rc: c_int) Error!void {
+    const err_msg = std.mem.sliceTo(c.lmjcore_strerror(rc), 0);
+    std.debug.print("error info: {s}\n", .{err_msg});
+
     if (mapLmjcoreError(rc)) |err| return err;
-    // 否则尝试 LMDB 错误
     try lmdbThrow(rc);
 }
 

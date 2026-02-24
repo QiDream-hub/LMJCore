@@ -446,7 +446,7 @@ fn mutPtrToC(ptr: *Ptr) [*c]u8 {
 pub fn readObject(
     txn: *Txn,
     obj_ptr: *const Ptr,
-    buffer: []align(@sizeOf(usize)) u8,
+    buffer: []align(@alignOf(usize)) u8,
 ) !*ResultObj {
     var result_head: ?*c.lmjcore_result_obj = undefined;
     const rc = c.lmjcore_obj_get(
@@ -468,7 +468,7 @@ pub fn readObject(
 pub fn readMembers(
     txn: *Txn,
     obj_ptr: *const Ptr,
-    buffer: []align(@sizeOf(usize)) u8,
+    buffer: []align(@alignOf(usize)) u8,
 ) !*ResultArr {
     var result_head: ?*c.lmjcore_result_obj = undefined;
     const rc = c.lmjcore_obj_member_list(
@@ -490,7 +490,7 @@ pub fn readMembers(
 pub fn readArray(
     txn: *Txn,
     arr_ptr: *const Ptr,
-    buffer: []align(@sizeOf(usize)) u8,
+    buffer: []align(@alignOf(usize)) u8,
 ) !*ResultArr {
     var result_head: ?*c.lmjcore_result_obj = undefined;
     const rc = c.lmjcore_arr_get(
@@ -512,7 +512,7 @@ pub fn readArray(
 pub fn auditObject(
     txn: *Txn,
     obj_ptr: *const Ptr,
-    buffer: []align(@sizeOf(usize)) u8,
+    buffer: []align(@alignOf(usize)) u8,
 ) !*AuditReport {
     var report_head: ?*c.lmjcore_audit_report = undefined;
     const rc = c.lmjcore_audit_object(
@@ -720,14 +720,14 @@ pub fn objStatMebers(
 // 指针转换工具
 pub fn ptrToString(
     ptr: *const Ptr,
-    buffer: []align(@sizeOf(usize)) u8,
+    buffer: []align(@alignOf(usize)) u8,
 ) !void {
     // 34字符HEX + 空终止符
     const rc = c.lmjcore_ptr_to_string(ptrToC(ptr), buffer.ptr, buffer.len);
     try throw(rc);
 }
 
-pub fn ptrFromString(str: *[:0]align(usize) const u8) !Ptr {
+pub fn ptrFromString(str: *[:0]align(@alignOf(usize)) const u8) !Ptr {
     var ptr: Ptr = undefined;
     const rc = c.lmjcore_ptr_from_string(str.ptr, mutPtrToC(&ptr));
     try throw(rc);

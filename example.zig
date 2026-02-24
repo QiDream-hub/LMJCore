@@ -52,8 +52,7 @@ pub fn main() !void {
     var ptrStr: [35]u8 align(@alignOf(usize)) = undefined;
     try lmj.ptrToString(&newObjPtr, &ptrStr);
     const ptrStrSpils = ptrStr[0..ptrStr.len];
-    std.debug.print("✅ 对象创建成功, Ptr: {s}\n", .{ptrStrSpils.*});
-    // 如果你想打印 Ptr，可以使用 lmj.ptrToString (需要 Allocator)
+    std.debug.print("✅ 对象创建成功, Ptr: {s}\n", .{ptrStrSpils});
 
     // 4. 给对象添加成员 (Key-Value)
     try lmj.objMemberPut(txn.?, &newObjPtr, "name", "Alice");

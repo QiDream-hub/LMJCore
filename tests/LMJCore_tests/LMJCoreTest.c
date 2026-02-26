@@ -19,7 +19,7 @@ int main() {
   }
 
   // 开始写事务
-  rc = lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+  rc = lmjcore_txn_begin(env, NULL, 0, &txn);
   if (rc != LMJCORE_SUCCESS) {
     printf("事务开始失败: %d\n", rc);
     lmjcore_cleanup(env);
@@ -70,7 +70,7 @@ int main() {
   rc = lmjcore_txn_commit(txn);
 
   // 读取数据
-  lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+  lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
 
   uint8_t result_buf[8192];
   lmjcore_result_obj *result;
@@ -91,14 +91,14 @@ int main() {
 
   lmjcore_txn_commit(txn);
 
-  lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+  lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
 
   uint8_t buff[4096];
   lmjcore_audit_report *head;
 
   rc = lmjcore_audit_object(txn, obj_ptr, buff, 4096, &head);
 
-  printf("%d",rc);
+  printf("%d", rc);
 
   // 清理
   lmjcore_cleanup(env);

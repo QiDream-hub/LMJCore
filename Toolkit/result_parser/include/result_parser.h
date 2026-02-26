@@ -133,8 +133,7 @@ int lmjcore_parser_get_error(const void *result, size_t index,
  * @param error_code 错误代码
  * @return bool 是否包含该错误
  */
-bool lmjcore_parser_has_error(const void *result,
-                              lmjcore_read_error_code error_code);
+bool lmjcore_parser_has_error(const void *result, int error_code);
 
 #ifdef __cplusplus
 }

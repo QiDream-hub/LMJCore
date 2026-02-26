@@ -80,7 +80,7 @@ void *stress_test_thread(void *arg) {
     lmjcore_ptr obj_ptr;
 
     // 开始写事务
-    int ret = lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+    int ret = lmjcore_txn_begin(env, NULL, 0, &txn);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
       continue;
@@ -122,7 +122,7 @@ void *stress_test_thread(void *arg) {
     // 随机读取测试
     if (i % 10 == 0) { // 每10次操作进行一次读取测试
       lmjcore_txn *read_txn = NULL;
-      if (lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &read_txn) ==
+      if (lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &read_txn) ==
           LMJCORE_SUCCESS) {
         uint8_t result_buf[4096];
         lmjcore_result_obj *result = NULL;
@@ -164,7 +164,7 @@ void *array_stress_test_thread(void *arg) {
     lmjcore_ptr arr_ptr;
 
     // 开始写事务
-    int ret = lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+    int ret = lmjcore_txn_begin(env, NULL, 0, &txn);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
       continue;
@@ -225,7 +225,7 @@ void *mixed_operations_thread(void *arg) {
 
   // 首先创建一个持久化对象
   lmjcore_txn *init_txn = NULL;
-  if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &init_txn) == LMJCORE_SUCCESS) {
+  if (lmjcore_txn_begin(env, NULL, 0, &init_txn) == LMJCORE_SUCCESS) {
     if (lmjcore_obj_create(init_txn, persistent_obj) == LMJCORE_SUCCESS) {
       obj_created = 1;
       lmjcore_txn_commit(init_txn);
@@ -242,7 +242,7 @@ void *mixed_operations_thread(void *arg) {
       lmjcore_txn *txn = NULL;
       lmjcore_ptr obj_ptr;
 
-      if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn) == LMJCORE_SUCCESS) {
+      if (lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
         if (lmjcore_obj_create(txn, obj_ptr) == LMJCORE_SUCCESS) {
           char member_name[MAX_MEMBER_NAME_LEN];
           char value[MAX_VALUE_LEN];
@@ -268,7 +268,7 @@ void *mixed_operations_thread(void *arg) {
       lmjcore_txn *txn = NULL;
       lmjcore_ptr arr_ptr;
 
-      if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn) == LMJCORE_SUCCESS) {
+      if (lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
         if (lmjcore_arr_create(txn, arr_ptr) == LMJCORE_SUCCESS) {
           char value[MAX_VALUE_LEN];
           int num_elements = (rand() % 5) + 1;
@@ -288,7 +288,7 @@ void *mixed_operations_thread(void *arg) {
     case 2: { // 读取操作
       if (obj_created) {
         lmjcore_txn *txn = NULL;
-        if (lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn) ==
+        if (lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn) ==
             LMJCORE_SUCCESS) {
           uint8_t result_buf[2048];
           lmjcore_result_obj *result = NULL;
@@ -308,8 +308,7 @@ void *mixed_operations_thread(void *arg) {
     case 3: { // 成员操作（如果持久对象存在）
       if (obj_created) {
         lmjcore_txn *txn = NULL;
-        if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn) ==
-            LMJCORE_SUCCESS) {
+        if (lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
           char member_name[MAX_MEMBER_NAME_LEN];
           char value[MAX_VALUE_LEN];
 
@@ -363,7 +362,7 @@ void memory_leak_test() {
     lmjcore_txn *txn = NULL;
     lmjcore_ptr ptr;
 
-    if (lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn) == LMJCORE_SUCCESS) {
+    if (lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
       if (i % 2 == 0) {
         lmjcore_obj_create(txn, ptr);
       } else {

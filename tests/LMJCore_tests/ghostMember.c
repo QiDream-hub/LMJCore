@@ -110,7 +110,7 @@ static void print_audit_report(const lmjcore_audit_report *report,
 static int verify_no_ghost_members(lmjcore_env *env,
                                    const lmjcore_ptr obj_ptr) {
   lmjcore_txn *txn = NULL;
-  int rc = lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+  int rc = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
   if (rc != LMJCORE_SUCCESS) {
     fprintf(stderr, "创建只读事务失败: %d\n", rc);
     return rc;
@@ -151,8 +151,9 @@ int main() {
   lmjcore_env *env = NULL;
   const char *test_db_path = "./lmjcore_db/test_ghost_db_fixed";
 
-  int rc = lmjcore_init(test_db_path, 1024 * 1024 * 10, // 10MB
-                        LMJCORE_FLAGS_NOSUBDIR, test_ptr_generator, NULL, &env);
+  int rc =
+      lmjcore_init(test_db_path, 1024 * 1024 * 10, // 10MB
+                   0 | LMJCORE_ENV_NOSUBDIR, test_ptr_generator, NULL, &env);
   if (rc != LMJCORE_SUCCESS) {
     fprintf(stderr, "初始化失败: %d\n", rc);
     return 1;
@@ -161,7 +162,7 @@ int main() {
 
   // 2. 创建测试对象
   lmjcore_txn *txn = NULL;
-  rc = lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+  rc = lmjcore_txn_begin(env, NULL, 0, &txn);
   if (rc != LMJCORE_SUCCESS) {
     fprintf(stderr, "创建写事务失败: %d\n", rc);
     lmjcore_cleanup(env);
@@ -221,7 +222,7 @@ int main() {
   printf("\n--- 步骤3: 执行审计 ---\n");
 
   // 打开只读事务进行审计
-  rc = lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+  rc = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
   if (rc != LMJCORE_SUCCESS) {
     fprintf(stderr, "创建只读事务失败: %d\n", rc);
     lmjcore_cleanup(env);
@@ -257,7 +258,7 @@ int main() {
 
   if (report && report->audit_cont > 0) {
     // 打开写事务进行修复
-    rc = lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+    rc = lmjcore_txn_begin(env, NULL, 0, &txn);
     if (rc != LMJCORE_SUCCESS) {
       fprintf(stderr, "创建修复事务失败: %d\n", rc);
       free(report_buf);
@@ -287,7 +288,7 @@ int main() {
 
   // 8. 完整性检查：读取对象验证
   printf("\n--- 步骤6: 完整性验证 ---\n");
-  rc = lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+  rc = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
   if (rc == LMJCORE_SUCCESS) {
     // 分配读取缓冲区
     uint8_t read_buf[1024];

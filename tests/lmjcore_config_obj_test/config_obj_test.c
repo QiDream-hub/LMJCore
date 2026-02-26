@@ -12,12 +12,12 @@ void test_config_basic_operations() {
 
   // 初始化环境
   int ret = lmjcore_init("./lmjcore_db/config_test/_1", 1024 * 1024,
-                         0 | LMJCORE_FLAGS_NOSUBDIR, lmjcore_uuidv4_ptr_gen,
-                         NULL, &env);
+                         0 | LMJCORE_ENV_NOSUBDIR, lmjcore_uuidv4_ptr_gen, NULL,
+                         &env);
   assert(ret == LMJCORE_SUCCESS);
 
   // 开始写事务
-  ret = lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+  ret = lmjcore_txn_begin(env, NULL, 0, &txn);
   assert(ret == LMJCORE_SUCCESS);
 
   // 测试1: 检查配置对象初始不存在
@@ -75,12 +75,12 @@ void test_config_lazy_initialization() {
 
   // 初始化环境
   int ret = lmjcore_init("./lmjcore_db/config_test/_2", 1024 * 1024,
-                         0 | LMJCORE_FLAGS_NOSUBDIR, lmjcore_uuidv4_ptr_gen,
-                         NULL, &env);
+                         0 | LMJCORE_ENV_NOSUBDIR, lmjcore_uuidv4_ptr_gen, NULL,
+                         &env);
   assert(ret == LMJCORE_SUCCESS);
 
   // 开始写事务
-  ret = lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+  ret = lmjcore_txn_begin(env, NULL, 0, &txn);
   assert(ret == LMJCORE_SUCCESS);
 
   // 测试: 直接设置配置项（应该自动创建配置对象）
@@ -121,12 +121,12 @@ void test_config_error_handling() {
 
   // 初始化环境
   int ret = lmjcore_init("./lmjcore_db/config_test/_3", 1024 * 1024,
-                         0 | LMJCORE_FLAGS_NOSUBDIR, lmjcore_uuidv4_ptr_gen,
-                         NULL, &env);
+                         0 | LMJCORE_ENV_NOSUBDIR, lmjcore_uuidv4_ptr_gen, NULL,
+                         &env);
   assert(ret == LMJCORE_SUCCESS);
 
   // 开始读事务
-  ret = lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+  ret = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
   assert(ret == LMJCORE_SUCCESS);
 
   // 测试1: 获取不存在的配置对象
@@ -140,7 +140,7 @@ void test_config_error_handling() {
   // 测试2: 获取不存在的配置项（但配置对象存在）
   // 首先创建配置对象
   lmjcore_txn_abort(txn); // 结束读事务
-  ret = lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+  ret = lmjcore_txn_begin(env, NULL, 0, &txn);
   assert(ret == LMJCORE_SUCCESS);
 
   ret = lmjcore_config_object_ensure(txn);
@@ -148,7 +148,7 @@ void test_config_error_handling() {
 
   // 现在尝试获取不存在的配置项
   lmjcore_txn_commit(txn);
-  ret = lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+  ret = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
   assert(ret == LMJCORE_SUCCESS);
 
   ret = lmjcore_config_get(txn, (const uint8_t *)test_key, strlen(test_key),

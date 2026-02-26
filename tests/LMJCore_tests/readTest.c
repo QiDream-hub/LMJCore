@@ -2,7 +2,7 @@
 #include "../../core/include/lmjcore.h"
 #include <stdio.h>
 
-int main(int argc,char *argv[]) {
+int main(int argc, char *argv[]) {
   lmjcore_ptr ptr;
   lmjcore_ptr_from_string(argv[1], ptr);
 
@@ -11,16 +11,15 @@ int main(int argc,char *argv[]) {
   lmjcore_txn *txn = NULL;
 
   // 初始化环境
-  int rc =
-      lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100, LMJCORE_FLAGS_MAX_PERF,
-                   lmjcore_uuidv4_ptr_gen, NULL, &env);
+  int rc = lmjcore_init("./lmjcore_db/", 1024 * 1024 * 100, LMJCORE_ENV_SAFE,
+                        lmjcore_uuidv4_ptr_gen, NULL, &env);
   if (rc != LMJCORE_SUCCESS) {
     printf("初始化失败: %d\n", rc);
     return 1;
   }
 
   // 创建读取事务
-  rc = lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+  rc = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
   if (rc != LMJCORE_SUCCESS) {
     printf("时间创建失败: %d\n", rc);
     return 1;

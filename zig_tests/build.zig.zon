@@ -1,8 +1,8 @@
 .{
-    .name = .LMJRouter,
-    .paths = .{ "src", "build.zig", "build.zig.zon" },
+    .name = .Test,
+    .paths = .{ "build.zig", "build.zig.zon" },
     .version = "0.0.1",
-    .fingerprint = 0x7ff04f064c6012fa,
+    .fingerprint = 0x784dd132c0def25f,
     .dependencies = .{
         .lmjcore = .{ .path = "../" },
     },

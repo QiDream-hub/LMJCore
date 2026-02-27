@@ -1,321 +1,305 @@
-# LMJCore —— 为极致性能而生的嵌入式存储内核 🚀
+# LMJCore
 
-LMJCore 是一个基于 **LMDB** 构建的高性能、嵌入式、无模式（Schema-less）键值存储内核。  
-通过创新的 **“指针扁平化”架构**，将任意嵌套数据结构（如 JSON、图、配置树）拆解为高效、可验证的扁平键值对，实现接近内存的访问速度与强一致性保障。
+**嵌入式存储内核 · 把嵌套数据“摊平”的高性能引擎**
 
-> 💡 **定位说明**：LMJCore 不是完整数据库，而是一个**可嵌入的存储内核**，为上层查询引擎（如未来的 `LMJQuery`）提供坚实、快速、一致的数据基石。
-
----
-
-## 🌟 核心特性
-
-### 🚀 极致性能
-- **指针扁平化存储**：复杂嵌套结构被“拍平”存储，消除递归解析开销。
-- **内存级读取**：受益于 LMDB 内存映射，点查延迟极低。
-- **细粒度写入**：局部更新仅操作最小数据单元，无需重写整个对象。
-
-### 🔧 灵活架构
-- **真正的无类型存储**：所有值均为二进制安全字节数组，支持任意编码（JSON、Protobuf、自定义等）。
-- **存索分离设计**：
-  - `main` 数据库存储具体值（命名格子区）
-  - `arr` 数据库存储成员/元素列表（集合袋区）
-- **可插拔指针生成**：支持 UUID、ULID、雪花算法、自增 ID 等策略（需保证唯一性）。
-
-### 🛡️ 数据安全
-- **完整 ACID 事务**：继承 LMDB 的事务特性，确保原子性与崩溃安全。
-- **数据状态自描述**：读取结果包含完整错误列表，上层可精确判断数据可用性。
-- **幽灵成员检测**：内置审计与修复机制，主动发现并清理数据损坏。
-
-### 📚 简洁原语
-- **二元归一模型**：仅用 **对象（Object）** 和 **数组（Array）** 两种结构建模任意复杂数据。
-- **统一指针系统**：17 字节全局唯一指针（含 1B 类型前缀 + 16B 唯一 ID）作为数据访问的唯一凭证。
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Language](https://img.shields.io/badge/language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
+[![LMDB](https://img.shields.io/badge/built%20on-LMDB-green.svg)](http://www.lmdb.tech/doc/)
 
 ---
 
-## 🏗️ 架构概述
-```plaintext
-应用层
-    │
-    ├── 查询层 (LMJQuery) - 画饼中
-    │
-    └── LMJCore 存储内核
-        ├── main 数据库 (存储单一映射)
-        └── arr 数据库 (存储列表映射)
-            │
-            └── LMDB (存储引擎)
+## 📖 概述
+
+LMJCore 是一个基于 [LMDB](http://www.lmdb.tech/doc/) 的嵌入式存储内核，专为**高度动态、深度嵌套的数据**（如 JSON、配置树、图结构）设计。它不提供查询语言，而是专注做一件事：
+
+> **把复杂结构“拆开存”，用全局指针重新“拼起来”——实现极致读写性能与强一致性。**
+
+### 核心思想（三句话讲清）
+
+1. **万物皆指针**  
+   每个对象/数组都有一个 **17 字节全局唯一 ID**（首字节标识类型：`0x01`=对象，`0x02`=数组）。
+
+2. **数据被彻底扁平化**  
+   嵌套结构不会以树形存储，而是拆成独立片段，分布在两个物理空间中。
+
+3. **靠两个“仓库”协作**  
+   - **`arr`（集合袋区）**：回答“这个实体有哪些关联项？”（成员名列表、数组元素列表）  
+   - **`main`（命名格子区）**：回答“这个成员的具体值是多少？”（`name → "Alice"`）
+
+---
+
+## ✨ 特性
+
+- **🚀 极致读性能**  
+  成员可并发点查 `main`，无需递归解析嵌套结构。
+
+- **📦 局部更新**  
+  修改一个字段只需更新一个 `main` 格子，不影响父结构。
+
+- **⚡ 继承 LMDB 优势**  
+  ACID 事务、MVCC、零拷贝、内存映射、崩溃安全。
+
+- **🔧 真正无模式**  
+  Value 是纯二进制，上层可自由编码（JSON、Protobuf、自定义）。
+
+- **🔗 无限可扩展**  
+  通过指针轻松构建图、树、双向引用等复杂拓扑。
+
+- **🛡️ 完整性保障**  
+  提供审计机制检测“幽灵成员”，确保数据一致性。
+
+---
+
+## 📦 安装
+
+### 依赖
+- [LMDB](https://github.com/LMDB/lmdb)（需预先安装）
+- C99 编译器
+
+### 编译
+
+```bash
+git clone https://github.com/QiDream-hub/LMJCore.git
+cd lmjcore
+make
 ```
 
+### 集成到你的项目
 
-> ✨ **心智模型**：
-> - `arr` 是“集合袋”：给定指针，列出它“拥有什么”（无序集合）。
-> - `main` 是“命名格子”：给定“谁的 + 叫什么”，直接拿到值（O(1) 点查）。
-> - **指针是胶水**：将分散片段重新组合成完整逻辑实体。
+只需包含 `lmjcore.h` 并链接 `liblmjcore.a` 和 LMDB：
+
+```c
+#include "lmjcore.h"
+// 链接时添加 -llmjcore -llmdb
+```
 
 ---
 
 ## 🚀 快速开始
 
-### 安装依赖
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install liblmdb-dev
-
-# CentOS/RHEL
-sudo yum install lmdb-devel
-
-# ArchLinux
-sudo pacman -S lmdb
-
-# macOS
-brew install lmdb
-````
-
-### 基础使用（C API）
+### 1. 初始化环境
 
 ```c
-#include "lmjcore.h"
-static int test_ptr_generator(void *ctx, uint8_t out[LMJCORE_PTR_LEN]) {
-  static uint64_t counter = 0;
-
-  out[0] = LMJCORE_OBJ; // 对象类型
-
-  // 使用大端序填充计数器
-  for (int i = 0; i < 8; i++) {
-    out[1 + i] = (counter >> (56 - i * 8)) & 0xFF;
-  }
-
-  counter++;
-  return LMJCORE_SUCCESS;
+lmjcore_env *env;
+int rc = lmjcore_init("./data", 10485760, LMJCORE_ENV_SAFE, 
+                      my_ptr_generator, NULL, &env);
+if (rc != LMJCORE_SUCCESS) {
+    printf("初始化失败: %s\n", lmjcore_strerror(rc));
+    return -1;
 }
+```
 
-// 初始化环境（必须提供指针生成器）
-lmjcore_env* env;
-lmjcore_init("/data/lmjcore", 1024 * 1024 * 1024, 0, test_ptr_generator, NULL, &env);
+### 2. 创建对象并写入数据
 
-// 创建写事务
-lmjcore_txn* txn;
-lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
-
-// 创建对象并写入数据
+```c
+lmjcore_txn *txn;
 lmjcore_ptr obj_ptr;
+
+// 开启写事务
+lmjcore_txn_begin(env, NULL, 0, &txn);
+
+// 创建对象
 lmjcore_obj_create(txn, obj_ptr);
 
-const char* name = "张三";
-int age = 25;
-lmjcore_obj_member_put(txn, obj_ptr, (uint8_t*)"name", 4, (uint8_t*)name, strlen(name));
-lmjcore_obj_member_put(txn, obj_ptr, (uint8_t*)"age", 3, (uint8_t*)&age, sizeof(age));
+// 写入成员
+lmjcore_obj_member_put(txn, obj_ptr, 
+                       (uint8_t*)"name", 4,
+                       (uint8_t*)"Alice", 5);
+
+lmjcore_obj_member_put(txn, obj_ptr,
+                       (uint8_t*)"age", 3,
+                       (uint8_t*)"30", 2);
 
 // 提交事务
 lmjcore_txn_commit(txn);
+```
 
-// 读取数据（结果自包含完整性信息）
-lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
-uint8_t result_buf[8192];
-lmjcore_result_obj* result;
-int rc = lmjcore_obj_get(txn, obj_ptr, result_buf, sizeof(result_buf), &result);
+### 3. 读取对象
 
+```c
+uint8_t buf[4096];
+lmjcore_result_obj *result;
+
+lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
+
+rc = lmjcore_obj_get(txn, obj_ptr, buf, sizeof(buf), &result);
 if (rc == LMJCORE_SUCCESS) {
-    // 检查是否有缺失成员或其他错误
-    if (result->error_count > 0) {
-        printf("警告：对象存在 %zu 个问题\n", result->error_count);
-        // 可遍历 result->errors[] 查看具体错误
-    }
-
-    // 安全遍历有效成员
-    for (size_t i = 0; i < result->member_count; i++) {
-        lmjcore_member_descriptor* desc = &result->members[i];
-        char* member_name = (char*)(result_buf + desc->member_name.value_offset);
-        uint8_t* value = result_buf + desc->member_value.value_offset;
-        printf("%.*s: %.*s\n",
-               (int)desc->member_name.value_len, member_name,
-               (int)desc->member_value.value_len, value);
-    }
+    printf("对象有 %zu 个成员\n", result->member_count);
+    // 遍历成员...
 }
-lmjcore_txn_commit(txn);
-lmjcore_cleanup(env);
+
+lmjcore_txn_abort(txn);
+```
+
+### 4. 审计数据完整性
+
+```c
+uint8_t audit_buf[8192];
+lmjcore_audit_report *report;
+
+rc = lmjcore_audit_object(txn, obj_ptr, audit_buf, sizeof(audit_buf), &report);
+if (report->audit_cont > 0) {
+    printf("发现 %zu 个幽灵成员，准备修复\n", report->audit_cont);
+    lmjcore_repair_object(txn, audit_buf, sizeof(audit_buf), report);
+}
 ```
 
 ---
 
-## 📖 核心概念
+## 📚 核心概念
 
-### 指针系统
+| 概念 | 说明 |
+|------|------|
+| **指针** | 17 字节全局唯一 ID，首字节标识类型（对象/数组） |
+| **`arr` 数据库** | 存储实体的关联项集合（成员名列表、数组元素列表），支持多值 |
+| **`main` 数据库** | 存储具体值，Key = `[指针][成员名]`，点查 O(1) |
+| **缺失值** | `arr` 中有成员名但 `main` 中无值 → 合法中间状态 |
+| **幽灵成员** | `main` 中有值但 `arr` 中未注册 → 数据损坏 |
 
-- 固定 17 字节：`[类型:1B][唯一ID:16B]`
-    - `0x01` → 对象（Object）
-    - `0x02` → 数组（Array）
-- 全局唯一，由上层生成器保证（内核不校验唯一性）。
-
-### 数据可用性由返回体自描述
-
-LMJCore **不提供“宽松/严格”读取模式开关**。  
-所有读取操作返回的结构体（如 `lmjcore_result_obj`）同时包含：
-
-- `members[]`：成功读取的成员描述符
-- `errors[]`：缺失值、实体不存在等错误详情（最多记录 8 项）
-
-上层应用应检查 `error_count` 来判断数据是否完整可用：
-
-- **`error_count == 0`**：对象完整。
-- **存在 `LMJCORE_READERR_MEMBER_MISSING`**：某些成员已注册但未赋值（合法中间状态，如分步初始化）。
-- **存在其他错误**：数据不可用，需处理异常。
-
-> ✅ 此设计将策略决策权交给上层，同时提供完整诊断信息，避免隐式行为。
-
-### 嵌套结构示例
-
-```json
-{ "user": { "name": "Bob" }, "tags": ["a", "b"] }
-```
-
-存储时：
-
-- `main[parent_ptr + "user"]` → `child_obj_ptr`（17B 指针）
-- `main[parent_ptr + "tags"]` → `tags_arr_ptr`（17B 指针）
-- 子对象/数组各自在 `arr`/`main` 中独立定义
+想深入了解？请阅读：
+- [LMJCore 核心存储模型](docs/LMJCore%20核心存储模型.md)
+- [LMJCore 概念指南](docs/LMJCore%20概念指南.md)
+- [LMJCore 核心设计定义](docs/LMJCore%20核心设计定义.md)
+- [LMJCore 事务模型](docs/LMJCore%20事务模型.md)
 
 ---
 
-## 🔧 API 概览
+## 🛠️ API 概览
 
 ### 环境管理
+```c
+int lmjcore_init(const char *path, size_t map_size, unsigned int flags,
+                 lmjcore_ptr_generator_fn ptr_gen, void *ptr_gen_ctx,
+                 lmjcore_env **env);
+int lmjcore_cleanup(lmjcore_env *env);
+```
 
-- `lmjcore_init()` / `lmjcore_cleanup()`
-
-### 事务控制
-
-- `lmjcore_txn_begin()` / `lmjcore_txn_commit()` / `lmjcore_txn_abort()`
+### 事务
+```c
+int lmjcore_txn_begin(lmjcore_env *env, lmjcore_txn *parent, 
+                      unsigned int flags, lmjcore_txn **txn);
+int lmjcore_txn_commit(lmjcore_txn *txn);
+int lmjcore_txn_abort(lmjcore_txn *txn);
+bool lmjcore_txn_is_read_only(lmjcore_txn *txn);
+```
 
 ### 对象操作
-
-- `lmjcore_obj_create()` / `lmjcore_obj_get()` / `lmjcore_obj_del()`
-- `lmjcore_obj_member_put()` / `lmjcore_obj_member_get()`
-- `lmjcore_obj_member_register()`（分步初始化）
+```c
+int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
+int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
+                    uint8_t *result_buf, size_t result_buf_size,
+                    lmjcore_result_obj **result_head);
+int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
+                           const uint8_t *member_name, size_t member_name_len,
+                           const uint8_t *value, size_t value_len);
+int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
+                           const uint8_t *member_name, size_t member_name_len,
+                           uint8_t *value_buf, size_t value_buf_size,
+                           size_t *value_size_out);
+// ... 更多 API 详见头文件
+```
 
 ### 数组操作
+```c
+int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
+int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
+                       const uint8_t *value, size_t value_len);
+int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
+                    uint8_t *result_buf, size_t result_buf_size,
+                    lmjcore_result_arr **result_head);
+```
 
-- `lmjcore_arr_create()` / `lmjcore_arr_append()` / `lmjcore_arr_get()`
+### 审计与修复
+```c
+int lmjcore_audit_object(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
+                         uint8_t *report_buf, size_t report_buf_size,
+                         lmjcore_audit_report **report_head);
+int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
+                          size_t report_buf_size, lmjcore_audit_report *report);
+```
 
 ### 工具函数
-
-- `lmjcore_ptr_to_string()` / `lmjcore_ptr_from_string()`
-- `lmjcore_entity_exist()` / `lmjcore_obj_member_value_exist()`
-- `lmjcore_audit_object()` / `lmjcore_repair_object()`（数据完整性保障）
+```c
+int lmjcore_ptr_to_string(const lmjcore_ptr ptr, char *str_buf, size_t buf_size);
+int lmjcore_ptr_from_string(const char *str, lmjcore_ptr ptr_out);
+const char *lmjcore_strerror(int error_code);
+```
 
 ---
 
-## 🎯 性能特点
+## ⚙️ 配置选项
 
-|操作|复杂度|说明|
-|---|---|---|
-|对象获取|O(log n) + k·O(1)|`arr` 查成员列表 + `main` 并发点查|
-|成员更新|O(1)|仅修改 `main` 中一个格子|
-|数组追加|O(log n)|LMDB 插入复杂度|
+### 环境标志
 
-> ✅ 所有写操作在单事务内原子完成，避免中间状态暴露。
+| 标志 | 说明 |
+|------|------|
+| `LMJCORE_ENV_NOSYNC` | 不强制同步到磁盘（提升性能，可能丢数据） |
+| `LMJCORE_ENV_WRITEMAP` | 使用可写内存映射（大幅提升写入性能） |
+| `LMJCORE_ENV_SAFE` | 安全模式（默认），每个事务强制刷盘 |
+| `LMJCORE_ENV_MAX_PERF` | 最大性能配置（组合所有优化标志） |
 
----
+### 事务标志
 
-## 🔍 适用场景
-
-### ✅ 理想用例
-
-- 高并发读取场景（配置中心、用户画像缓存）
-- 灵活 Schema 需求（快速迭代业务）
-- 嵌入式环境（IoT 设备、边缘计算）
-- 作为底层存储引擎构建上层数据库
-
-### ❌ 不适用场景
-
-- 复杂关联查询（需上层构建索引）
-- 大规模 OLAP 分析任务
-- 强 Schema 约束或 SQL 兼容性要求
+| 标志 | 说明 |
+|------|------|
+| `LMJCORE_TXN_READONLY` | 只读事务 |
+| `LMJCORE_TXN_NOSYNC` | 事务级不强制同步 |
+| `LMJCORE_TXN_HIGH_PERF` | 事务高性能模式 |
 
 ---
 
-## 🛠️ 构建与测试
+## 📊 性能贴士
 
-```bash
-git clone https://github.com/QiDream-hub/LMJCore.gi
-cd lmjcore
-make
-```
+- **读事务要短**：长读事务会阻止 LMDB 清理旧数据页，导致文件膨胀。
+- **批量写入**：将多个写入操作合并到同一事务，大幅提升性能。
+- **合理设置 map_size**：根据数据量预估，过小会导致 `MDB_MAP_RESIZED`。
+- **成员名 ≤ 493 字节**：受 LMDB Key 长度限制（17B 指针 + 成员名 ≤ 511B）。
+- **数组顺序**：`arr` 不保序，若需有序数组，请在 Value 中编码下标。
 
-### 测试
+---
 
-#### lmjcore 核心测试
-```bash
-#基础读写测试
-mkdir -p lmjcre_db/
-./build/bin/LMJCoreTest 
-```
-```bash
-#持久化数据读取测试
-mkdir -p lmjcre_db/
-./build/bin/LMJCoreTest 
-./build/bin/readTest [指针]
-```
-```bash
-#压力测试
-#特别说明压力测试使用多线程且没有优化读取与写入的时机导致会出现在同时多个写入导致失败报错
-mkdir -p lmjcre_db/
-./build/bin/stressTest
-```
-#### 工具包测试
-```bash
-#配置对象测试
-mkdir -p lmjcre_db/config_test
-./build/bin/config_obj_test
-```
-```bash
-#返回体解析工具测试
-./build/bin/result_parsert_test
-```
-```bash
-#UUIDV4指针生成器测试
-./build/bin/ptr_uuid_gen
-```
+## 🔮 未来愿景
+
+LMJCore 的设计不仅是嵌入式场景的优化，更是通向分布式架构的密钥：
+
+- **单用户单实例**：每个用户独占一个实例，实现物理隔离与线性扩展
+- **分布式路由网络**：指针即地址，构建无限水平扩展的联邦架构
+- **在线热扩展**：挂载即服务，动态负载均衡
+
+详见 [LMJCore 愿景文档](docs/LMJCore%20愿景文档.md)
 
 ---
 
 ## 🤝 贡献指南
 
-我们欢迎各种形式的贡献！
+欢迎贡献！请遵循以下步骤：
 
 1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交改动 (`git commit -m 'Add some amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 提交 Pull Request
+
+### 开发规范
+
+- 遵循 [LMJCore 核心设计定义](docs/LMJCore%20核心设计定义.md) 中的契约
+- 保持 API 风格一致
+- 新增功能需编写单元测试
+- 更新相关文档
 
 ---
 
 ## 📄 许可证
 
-本项目采用 **MIT 许可证** —— 查看 LICENSE 文件了解详情。
+[MIT License](LICENSE) © 2025 LMJCore Contributors
 
 ---
 
-## 🙏 关于本项目
+## 🙏 致谢
 
-> **真诚透明**：作为新人开发者，这是我第一次在 GitHub 上传项目。在 LMJCore 的开发过程中，我大量使用了 AI 辅助进行代码实现、文档编写和架构设计。虽然核心设计理念是我的，但具体实现得到了 AI 的很大帮助。这是一个学习成长的过程，感谢理解！
-
-### 🙏 致谢
-
-- 基于 [LMDB](https://symas.com/lmdb/) 构建，继承其卓越的存储特性
-- 受现JSON数据结构,与c语言指针启发
+- [LMDB](http://www.lmdb.tech/doc/) - 提供坚实的高性能 KV 存储基石
+- 所有贡献者和使用者
 
 ---
 
-## 📚 文档资源
-
-- 核心设计定义
-- 事务控制规范
-- 实现细则与集成指南
-- 架构愿景
-- 指针关系管理规范
-
----
-
-**LMJCore —— 用最简模型，释放极致性能。** 🚀
+**LMJCore - 把复杂留给自己，把简单留给上层**

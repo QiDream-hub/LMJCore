@@ -1,4 +1,4 @@
-lmjcore_db/**
+**/lmjcore_db/**
 bin/**
 build/**
 **.o

@@ -79,7 +79,7 @@ fn testLifecycle() !void {
     var txn: ?*lmj.Txn = null;
 
     // 1. 初始化环境 (使用安全模式)
-    try lmj.init("test_data", 1024 * 1024, lmj.EnvPresets.SAFE, mockPtrGen, null, &env);
+    try lmj.init("lmjcore_db", 1024 * 1024, lmj.EnvPresets.SAFE, mockPtrGen, null, &env);
     if (env) |e| {
         std.debug.print(" 环境初始化成功\n", .{});
 

@@ -580,10 +580,10 @@ pub fn txnAbort(txn: *Txn) void {
 }
 
 // 对象创建
-pub fn objCreate(txn: *Txn, ptr: *Ptr) !void {
+pub fn objCreate(txn: *Txn, ptr_out: *Ptr) !void {
     const rc = c.lmjcore_obj_create(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
-        mutPtrToC(ptr),
+        mutPtrToC(ptr_out),
     );
     try throw(rc);
 }
@@ -635,14 +635,12 @@ pub fn objMemberGet(
 }
 
 // 数组操作
-pub fn arrCreate(txn: *Txn) !Ptr {
-    var ptr: Ptr = undefined;
+pub fn arrCreate(txn: *Txn, ptr_out: *Ptr) !Ptr {
     const rc = c.lmjcore_arr_create(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
-        mutPtrToC(&ptr),
+        mutPtrToC(ptr_out),
     );
     try throw(rc);
-    return ptr;
 }
 
 pub fn arrAppend(

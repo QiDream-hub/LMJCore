@@ -106,7 +106,7 @@ pub fn throw(rc: c_int) Error!void {
 // LMDB 错误转换
 fn lmdbThrow(rc: c_int) Error!void {
     try switch (rc) {
-        c.MDB_SUCCESS => Error.SUCCESS,
+        c.MDB_SUCCESS => {},
         c.MDB_KEYEXIST => Error.MDB_KEYEXIST,
         c.MDB_NOTFOUND => Error.MDB_NOTFOUND,
         c.MDB_PAGE_NOTFOUND => Error.MDB_PAGE_NOTFOUND,

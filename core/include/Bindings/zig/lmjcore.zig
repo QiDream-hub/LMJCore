@@ -618,7 +618,7 @@ pub fn objMemberGet(
     txn: *Txn,
     obj_ptr: *const Ptr,
     name: []const u8,
-    out_buf: []u8,
+    out_buf: []align(@alignOf(usize)) u8,
 ) !usize {
     var actual_len: usize = undefined;
     const rc = c.lmjcore_obj_member_get(
@@ -668,7 +668,7 @@ pub fn entityExist(txn: *Txn, ptr: *const Ptr) !bool {
 }
 
 // 修复对象--删除错误的成员
-pub fn repairObject(txn: *Txn, report: *AuditReport, buffer: []u8) !void {
+pub fn repairObject(txn: *Txn, report: *AuditReport, buffer: []align(@alignOf(usize)) u8) !void {
     const rc = c.lmjcore_repair_object(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
         buffer.ptr,

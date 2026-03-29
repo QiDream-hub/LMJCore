@@ -73,7 +73,7 @@ pub const Error = error{
 // LMJCore 错误码映射
 fn mapLmjcoreError(rc: c_int) ?Error {
     return switch (rc) {
-        c.LMJCORE_SUCCESS => Error.SUCCESS,
+        c.LMJCORE_SUCCESS => null,
         c.LMJCORE_ERROR_INVALID_PARAM => Error.InvalidParam,
         c.LMJCORE_ERROR_NULL_POINTER => Error.NullPointer,
         c.LMJCORE_ERROR_MEMBER_TOO_LONG => Error.MemberTooLong,

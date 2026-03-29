@@ -3,6 +3,8 @@ const c = @import("c.zig").c;
 
 // === 错误码 ===
 pub const Error = error{
+    // 成功
+    SUCCESS,
     // LMJCore 专属错误（-32000 ~ -32999）
     // 参数相关 (-32000 ~ -32019)
     InvalidParam, // -32000: 通用参数无效
@@ -71,7 +73,7 @@ pub const Error = error{
 // LMJCore 错误码映射
 fn mapLmjcoreError(rc: c_int) ?Error {
     return switch (rc) {
-        c.LMJCORE_SUCCESS => null,
+        c.LMJCORE_SUCCESS => Error.SUCCESS,
         c.LMJCORE_ERROR_INVALID_PARAM => Error.InvalidParam,
         c.LMJCORE_ERROR_NULL_POINTER => Error.NullPointer,
         c.LMJCORE_ERROR_MEMBER_TOO_LONG => Error.MemberTooLong,
@@ -104,7 +106,7 @@ pub fn throw(rc: c_int) Error!void {
 // LMDB 错误转换
 fn lmdbThrow(rc: c_int) Error!void {
     try switch (rc) {
-        c.MDB_SUCCESS => {},
+        c.MDB_SUCCESS => Error.SUCCESS,
         c.MDB_KEYEXIST => Error.MDB_KEYEXIST,
         c.MDB_NOTFOUND => Error.MDB_NOTFOUND,
         c.MDB_PAGE_NOTFOUND => Error.MDB_PAGE_NOTFOUND,

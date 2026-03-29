@@ -3,8 +3,6 @@ const c = @import("c.zig").c;
 
 // === 错误码 ===
 pub const Error = error{
-    // 成功
-    SUCCESS,
     // LMJCore 专属错误（-32000 ~ -32999）
     // 参数相关 (-32000 ~ -32019)
     InvalidParam, // -32000: 通用参数无效

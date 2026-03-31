@@ -73,7 +73,7 @@ size_t lmjcore_parser_obj_member_count(const lmjcore_result_obj *result);
  *   - LMJCORE_SUCCESS: 获取成功
  *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 索引越界
  */
-int lmjcore_parser_arr_get_element(const lmjcore_result_arr *result,
+int lmjcore_parser_arr_get_element(const lmjcore_result_set *result,
                                    const uint8_t *result_buf, size_t index,
                                    const uint8_t **element_data,
                                    size_t *element_len);
@@ -90,7 +90,7 @@ int lmjcore_parser_arr_get_element(const lmjcore_result_arr *result,
  *   - LMJCORE_SUCCESS: 找到元素
  *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 元素不存在
  */
-int lmjcore_parser_arr_find_element(const lmjcore_result_arr *result,
+int lmjcore_parser_arr_find_element(const lmjcore_result_set *result,
                                     const uint8_t *result_buf,
                                     const uint8_t *element, size_t element_len,
                                     size_t *found_index);
@@ -101,7 +101,7 @@ int lmjcore_parser_arr_find_element(const lmjcore_result_arr *result,
  * @param result 结果结构体指针
  * @return size_t 元素数量
  */
-size_t lmjcore_parser_arr_element_count(const lmjcore_result_arr *result);
+size_t lmjcore_parser_arr_element_count(const lmjcore_result_set *result);
 
 // ==================== 错误信息解析 ====================
 

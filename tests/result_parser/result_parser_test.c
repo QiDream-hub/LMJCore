@@ -57,11 +57,11 @@ static void build_mock_obj_result(uint8_t *buf, size_t buf_size,
 
 // 辅助：构建模拟的数组结果缓冲区
 static void build_mock_arr_result(uint8_t *buf, size_t buf_size,
-                                  lmjcore_result_arr **out_head,
+                                  lmjcore_result_set **out_head,
                                   const char *elements[], size_t count) {
 
   size_t header_size =
-      sizeof(lmjcore_result_arr) + sizeof(lmjcore_descriptor) * count;
+      sizeof(lmjcore_result_set) + sizeof(lmjcore_descriptor) * count;
   size_t data_size = 0;
   for (size_t i = 0; i < count; ++i) {
     data_size += strlen(elements[i]);
@@ -71,12 +71,12 @@ static void build_mock_arr_result(uint8_t *buf, size_t buf_size,
 
   memset(buf, 0, buf_size);
 
-  lmjcore_result_arr *head = (lmjcore_result_arr *)buf;
+  lmjcore_result_set *head = (lmjcore_result_set *)buf;
   head->error_count = 0;
   head->element_count = count;
 
   lmjcore_descriptor *descs =
-      (lmjcore_descriptor *)(buf + sizeof(lmjcore_result_arr));
+      (lmjcore_descriptor *)(buf + sizeof(lmjcore_result_set));
   uint8_t *data_ptr = buf + buf_size;
 
   for (size_t i = 0; i < count; ++i) {
@@ -157,7 +157,7 @@ int main(void) {
   {
     const char *elems[] = {"apple", "banana", "cherry"};
     uint8_t buf[1024];
-    lmjcore_result_arr *arr_result;
+    lmjcore_result_set *arr_result;
 
     build_mock_arr_result(buf, sizeof(buf), &arr_result, elems, 3);
 

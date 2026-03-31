@@ -1,5 +1,5 @@
 const std = @import("std");
-const lmj = @import("lmjcore"); // 确保这个路径能正确找到你的绑定文件
+const lmj = @import("lmjcore");
 
 // ==========================================
 // 指针生成器回调函数

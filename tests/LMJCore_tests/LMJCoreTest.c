@@ -28,14 +28,14 @@ int main() {
 
   lmjcore_ptr arr_ptr;
   // 创建数组
-  rc = lmjcore_arr_create(txn, arr_ptr);
+  rc = lmjcore_set_create(txn, arr_ptr);
   if (rc != LMJCORE_SUCCESS) {
     printf("数组创建失败");
     lmjcore_txn_abort(txn);
     lmjcore_cleanup(env);
   }
-  rc = lmjcore_arr_append(txn, arr_ptr, (uint8_t *)"const uint8_t *value",
-                          sizeof("const uint8_t *value"));
+  rc = lmjcore_set_add(txn, arr_ptr, (uint8_t *)"const uint8_t *value",
+                       sizeof("const uint8_t *value"));
   if (rc != LMJCORE_SUCCESS) {
     printf("数组提交元素失败");
     lmjcore_txn_abort(txn);

@@ -272,11 +272,11 @@ pub const TxnPresets = struct {
 // === 类型定义 ===
 pub const Ptr = [c.LMJCORE_PTR_LEN]u8;
 pub const PtrLen = c.LMJCORE_PTR_LEN;
-pub const PtrSteingLen = c.LMJCORE_PTR_STRING_LEN;
+pub const PtrStringLen = c.LMJCORE_PTR_STRING_LEN;
 
 pub const EntityType = enum(u8) {
     obj = c.LMJCORE_OBJ,
-    arr = c.LMJCORE_ARR,
+    set = c.LMJCORE_SET,
 };
 
 // === 句柄类型（opaque）===
@@ -381,21 +381,21 @@ pub const ResultObj = extern struct {
     }
 };
 
-// 数组返回体
-pub const ResultArr = extern struct {
+// 集合返回体
+pub const ResultSet = extern struct {
     error_count: usize,
     errors: [c.LMJCORE_MAX_READ_ERRORS]ReadError,
     element_count: usize,
     elements: [0]Descriptor, // 柔性数组
 
     // 获取元素描述符切片
-    pub fn getElements(self: *const ResultArr) []const Descriptor {
+    pub fn getElements(self: *const ResultSet) []const Descriptor {
         return @as([*]const Descriptor, @ptrCast(&self.elements))[0..self.element_count];
     }
 
     // 遍历所有元素并打印（调试用）
-    pub fn debugPrint(self: *const ResultArr, buffer: []const u8) void {
-        std.debug.print("Array Result:\n", .{});
+    pub fn debugPrint(self: *const ResultSet, buffer: []const u8) void {
+        std.debug.print("Set Result:\n", .{});
         std.debug.print("  element_count: {d}\n", .{self.element_count});
         std.debug.print("  error_count: {d}\n", .{self.error_count});
 
@@ -419,16 +419,16 @@ pub const ResultArr = extern struct {
 
 // 审计报告
 pub const AuditReport = extern struct {
-    audit_cont: usize,
+    audit_count: usize,
     audit_descriptor: [0]AuditDescriptor,
 
     pub fn getDescriptors(self: *const AuditReport) []const AuditDescriptor {
-        return @as([*]const AuditDescriptor, @ptrCast(&self.audit_descriptor))[0..self.audit_cont];
+        return @as([*]const AuditDescriptor, @ptrCast(&self.audit_descriptor))[0..self.audit_count];
     }
 
     pub fn debugPrint(self: *const AuditReport) void {
         std.debug.print("Audit Report:\n", .{});
-        std.debug.print("  audit_cont: {d}\n", .{self.audit_cont});
+        std.debug.print("  audit_count: {d}\n", .{self.audit_count});
     }
 };
 
@@ -467,13 +467,13 @@ pub fn readObject(
     return @as(*ResultObj, @ptrCast(result_head.?));
 }
 
-// === 读取成员 ===
+// === 读取成员列表 ===
 pub fn readMembers(
     txn: *Txn,
     obj_ptr: *const Ptr,
     buffer: []align(@alignOf(usize)) u8,
-) !*ResultArr {
-    var result_head: ?*c.lmjcore_result_obj = undefined;
+) !*ResultSet {
+    var result_head: ?*c.lmjcore_result_set = undefined;
     const rc = c.lmjcore_obj_member_list(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
         ptrToC(obj_ptr),
@@ -486,19 +486,19 @@ pub fn readMembers(
 
     if (result_head == null) return error.UnexpectedNull;
 
-    return @as(*ResultArr, @ptrCast(result_head.?));
+    return @as(*ResultSet, @ptrCast(result_head.?));
 }
 
-// === 读取数组 ===
-pub fn readArray(
+// === 读取集合 ===
+pub fn readSet(
     txn: *Txn,
-    arr_ptr: *const Ptr,
+    set_ptr: *const Ptr,
     buffer: []align(@alignOf(usize)) u8,
-) !*ResultArr {
-    var result_head: ?*c.lmjcore_result_obj = undefined;
-    const rc = c.lmjcore_arr_get(
+) !*ResultSet {
+    var result_head: ?*c.lmjcore_result_set = undefined;
+    const rc = c.lmjcore_set_get(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
-        ptrToC(arr_ptr),
+        ptrToC(set_ptr),
         buffer.ptr,
         buffer.len,
         &result_head,
@@ -508,7 +508,7 @@ pub fn readArray(
 
     if (result_head == null) return error.UnexpectedNull;
 
-    return @as(*ResultArr, @ptrCast(result_head.?));
+    return @as(*ResultSet, @ptrCast(result_head.?));
 }
 
 // === 审计对象封装 ===
@@ -634,27 +634,134 @@ pub fn objMemberGet(
     return actual_len;
 }
 
-// 数组操作
-pub fn arrCreate(txn: *Txn, ptr_out: *Ptr) !Ptr {
-    const rc = c.lmjcore_arr_create(
+pub fn objMemberRegister(
+    txn: *Txn,
+    obj_ptr: *const Ptr,
+    name: []const u8,
+) !void {
+    const rc = c.lmjcore_obj_member_register(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(obj_ptr),
+        name.ptr,
+        name.len,
+    );
+    try throw(rc);
+}
+
+pub fn objMemberValueDel(
+    txn: *Txn,
+    obj_ptr: *const Ptr,
+    name: []const u8,
+) !void {
+    const rc = c.lmjcore_obj_member_value_del(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(obj_ptr),
+        name.ptr,
+        name.len,
+    );
+    try throw(rc);
+}
+
+pub fn objMemberDel(
+    txn: *Txn,
+    obj_ptr: *const Ptr,
+    name: []const u8,
+) !void {
+    const rc = c.lmjcore_obj_member_del(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(obj_ptr),
+        name.ptr,
+        name.len,
+    );
+    try throw(rc);
+}
+
+// 对象删除
+pub fn objDel(txn: *Txn, obj_ptr: *const Ptr) !void {
+    const rc = c.lmjcore_obj_del(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(obj_ptr),
+    );
+    try throw(rc);
+}
+
+// 集合操作
+pub fn setCreate(txn: *Txn, ptr_out: *Ptr) !void {
+    const rc = c.lmjcore_set_create(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
         mutPtrToC(ptr_out),
     );
     try throw(rc);
 }
 
-pub fn arrAppend(
+pub fn setAdd(
     txn: *Txn,
-    arr_ptr: *const Ptr,
+    set_ptr: *const Ptr,
     value: []const u8,
 ) !void {
-    const rc = c.lmjcore_arr_append(
+    const rc = c.lmjcore_set_add(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
-        ptrToC(arr_ptr),
+        ptrToC(set_ptr),
         value.ptr,
         value.len,
     );
     try throw(rc);
+}
+
+pub fn setDel(txn: *Txn, set_ptr: *const Ptr) !void {
+    const rc = c.lmjcore_set_del(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(set_ptr),
+    );
+    try throw(rc);
+}
+
+pub fn setRemove(
+    txn: *Txn,
+    set_ptr: *const Ptr,
+    element: []const u8,
+) !void {
+    const rc = c.lmjcore_set_remove(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(set_ptr),
+        element.ptr,
+        element.len,
+    );
+    try throw(rc);
+}
+
+pub fn setContains(
+    txn: *Txn,
+    set_ptr: *const Ptr,
+    element: []const u8,
+) !bool {
+    const rc = c.lmjcore_set_contains(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(set_ptr),
+        element.ptr,
+        element.len,
+    );
+    if (rc < 0) try throw(rc);
+    return rc == 1;
+}
+
+pub fn setStat(
+    txn: *Txn,
+    set_ptr: *const Ptr,
+) !struct { total_value_len: usize, element_count: usize } {
+    var total_len: usize = undefined;
+    var element_count: usize = undefined;
+    const rc = c.lmjcore_set_stat(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(set_ptr),
+        &total_len,
+        &element_count,
+    );
+    try throw(rc);
+    return .{
+        .total_value_len = total_len,
+        .element_count = element_count,
+    };
 }
 
 // 存在性检查
@@ -662,6 +769,22 @@ pub fn entityExist(txn: *Txn, ptr: *const Ptr) !bool {
     const rc = c.lmjcore_entity_exist(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
         ptrToC(ptr),
+    );
+    if (rc < 0) try throw(rc);
+    return rc == 1;
+}
+
+// 成员值存在性检查
+pub fn objMemberValueExist(
+    txn: *Txn,
+    obj_ptr: *const Ptr,
+    name: []const u8,
+) !bool {
+    const rc = c.lmjcore_obj_member_value_exist(
+        @as(*c.lmjcore_txn, @ptrCast(txn)),
+        ptrToC(obj_ptr),
+        name.ptr,
+        name.len,
     );
     if (rc < 0) try throw(rc);
     return rc == 1;
@@ -699,23 +822,28 @@ pub fn objStatValues(
 }
 
 // 统计成员名长度
-pub fn objStatMebers(
+pub fn objStatMembers(
     txn: *Txn,
     obj_ptr: *const Ptr,
-) !struct { total_value_len: usize, total_value_count: usize } {
+) !struct { total_member_len: usize, member_count: usize } {
     var total_len: usize = undefined;
-    var total_count: usize = undefined;
+    var member_count: usize = undefined;
     const rc = c.lmjcore_obj_stat_members(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
         ptrToC(obj_ptr),
         &total_len,
-        &total_count,
+        &member_count,
     );
     try throw(rc);
     return .{
-        .total_value_len = total_len,
-        .total_value_count = total_count,
+        .total_member_len = total_len,
+        .member_count = member_count,
     };
+}
+
+// 事务类型判断
+pub fn txnIsReadOnly(txn: *Txn) bool {
+    return c.lmjcore_txn_is_read_only(@as(*c.lmjcore_txn, @ptrCast(txn)));
 }
 
 // 指针转换工具
@@ -728,7 +856,7 @@ pub fn ptrToString(
     try throw(rc);
 }
 
-pub fn ptrFromString(str: *[:0]align(@alignOf(usize)) const u8) !Ptr {
+pub fn ptrFromString(str: [:0]align(@alignOf(usize)) const u8) !Ptr {
     var ptr: Ptr = undefined;
     const rc = c.lmjcore_ptr_from_string(str.ptr, mutPtrToC(&ptr));
     try throw(rc);

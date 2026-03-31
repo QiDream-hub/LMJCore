@@ -171,7 +171,7 @@ void *array_stress_test_thread(void *arg) {
     }
 
     // 创建数组
-    ret = lmjcore_arr_create(txn, arr_ptr);
+    ret = lmjcore_set_create(txn, arr_ptr);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
       lmjcore_txn_abort(txn);
@@ -185,8 +185,8 @@ void *array_stress_test_thread(void *arg) {
     for (int j = 0; j < num_elements; j++) {
       generate_random_string(value, sizeof(value));
 
-      ret = lmjcore_arr_append(txn, arr_ptr, (const uint8_t *)value,
-                               strlen(value));
+      ret =
+          lmjcore_set_add(txn, arr_ptr, (const uint8_t *)value, strlen(value));
       if (ret != LMJCORE_SUCCESS) {
         ctx->error_count++;
         break;
@@ -269,14 +269,14 @@ void *mixed_operations_thread(void *arg) {
       lmjcore_ptr arr_ptr;
 
       if (lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
-        if (lmjcore_arr_create(txn, arr_ptr) == LMJCORE_SUCCESS) {
+        if (lmjcore_set_create(txn, arr_ptr) == LMJCORE_SUCCESS) {
           char value[MAX_VALUE_LEN];
           int num_elements = (rand() % 5) + 1;
 
           for (int j = 0; j < num_elements; j++) {
             generate_random_string(value, sizeof(value));
-            lmjcore_arr_append(txn, arr_ptr, (const uint8_t *)value,
-                               strlen(value));
+            lmjcore_set_add(txn, arr_ptr, (const uint8_t *)value,
+                            strlen(value));
           }
           ctx->success_count++;
         }
@@ -366,7 +366,7 @@ void memory_leak_test() {
       if (i % 2 == 0) {
         lmjcore_obj_create(txn, ptr);
       } else {
-        lmjcore_arr_create(txn, ptr);
+        lmjcore_set_create(txn, ptr);
       }
       lmjcore_txn_commit(txn);
     }

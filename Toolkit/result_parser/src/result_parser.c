@@ -57,7 +57,7 @@ size_t lmjcore_parser_obj_member_count(const lmjcore_result_obj *result) {
 
 // ==================== 数组结果解析 ====================
 
-int lmjcore_parser_arr_get_element(const lmjcore_result_arr *result,
+int lmjcore_parser_arr_get_element(const lmjcore_result_set *result,
                                    const uint8_t *result_buf, size_t index,
                                    const uint8_t **element_data,
                                    size_t *element_len) {
@@ -74,7 +74,7 @@ int lmjcore_parser_arr_get_element(const lmjcore_result_arr *result,
   return LMJCORE_SUCCESS;
 }
 
-int lmjcore_parser_arr_find_element(const lmjcore_result_arr *result,
+int lmjcore_parser_arr_find_element(const lmjcore_result_set *result,
                                     const uint8_t *result_buf,
                                     const uint8_t *element, size_t element_len,
                                     size_t *found_index) {
@@ -95,7 +95,7 @@ int lmjcore_parser_arr_find_element(const lmjcore_result_arr *result,
   return LMJCORE_ERROR_ENTITY_NOT_FOUND;
 }
 
-size_t lmjcore_parser_arr_element_count(const lmjcore_result_arr *result) {
+size_t lmjcore_parser_arr_element_count(const lmjcore_result_set *result) {
   return result ? result->element_count : 0;
 }
 

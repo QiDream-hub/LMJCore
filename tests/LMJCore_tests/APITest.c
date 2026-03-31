@@ -217,7 +217,7 @@ static void test_object_operations(lmjcore_env *env) {
   printf("值总长度: %zu, 值数量: %zu\n", total_len, total_count);
 
   // 11. 获取成员列表
-  lmjcore_result_arr *member_list;
+  lmjcore_result_set *member_list;
   rc = lmjcore_obj_member_list(txn, obj_ptr, buffer, sizeof(buffer),
                                &member_list);
   print_test_result("lmjcore_obj_member_list", rc, LMJCORE_SUCCESS);
@@ -284,28 +284,28 @@ static void test_array_operations(lmjcore_env *env) {
   lmjcore_txn *txn = NULL;
   lmjcore_ptr arr_ptr;
   uint8_t buffer[TEST_BUF_SIZE];
-  lmjcore_result_arr *result;
+  lmjcore_result_set *result;
 
   int rc = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_DEFAULT, &txn);
   assert(rc == LMJCORE_SUCCESS);
 
   // 1. 创建数组
-  rc = lmjcore_arr_create(txn, arr_ptr);
+  rc = lmjcore_set_create(txn, arr_ptr);
   print_test_result("lmjcore_arr_create", rc, LMJCORE_SUCCESS);
   print_ptr("创建的数组", arr_ptr);
 
   // 2. 追加元素
   const char *elements[] = {"Apple", "Banana", "Cherry", "Date"};
   for (int i = 0; i < 4; i++) {
-    rc = lmjcore_arr_append(txn, arr_ptr, (const uint8_t *)elements[i],
-                            strlen(elements[i]) + 1);
+    rc = lmjcore_set_add(txn, arr_ptr, (const uint8_t *)elements[i],
+                         strlen(elements[i]) + 1);
     printf("  追加: %s\n", elements[i]);
   }
   print_test_result("lmjcore_arr_append (4次)", LMJCORE_SUCCESS,
                     LMJCORE_SUCCESS);
 
   // 3. 获取数组
-  rc = lmjcore_arr_get(txn, arr_ptr, buffer, sizeof(buffer), &result);
+  rc = lmjcore_set_get(txn, arr_ptr, buffer, sizeof(buffer), &result);
   print_test_result("lmjcore_arr_get", rc, LMJCORE_SUCCESS);
 
   if (rc == LMJCORE_SUCCESS) {
@@ -320,16 +320,16 @@ static void test_array_operations(lmjcore_env *env) {
 
   // 4. 统计数组
   size_t total_len, count;
-  rc = lmjcore_arr_stat_element(txn, arr_ptr, &total_len, &count);
+  rc = lmjcore_set_stat(txn, arr_ptr, &total_len, &count);
   print_test_result("lmjcore_arr_stat_element", rc, LMJCORE_SUCCESS);
   printf("数组统计: 总长度=%zu, 元素数量=%zu\n", total_len, count);
 
   // 5. 删除一个元素
-  rc = lmjcore_arr_element_del(txn, arr_ptr, (const uint8_t *)"Banana", 7);
+  rc = lmjcore_set_remove(txn, arr_ptr, (const uint8_t *)"Banana", 7);
   print_test_result("lmjcore_arr_element_del (Banana)", rc, LMJCORE_SUCCESS);
 
   // 6. 再次获取数组，确认删除
-  rc = lmjcore_arr_get(txn, arr_ptr, buffer, sizeof(buffer), &result);
+  rc = lmjcore_set_get(txn, arr_ptr, buffer, sizeof(buffer), &result);
   if (rc == LMJCORE_SUCCESS) {
     printf("删除后数组元素数量: %zu\n", result->element_count);
     printf("剩余元素:\n");
@@ -341,7 +341,7 @@ static void test_array_operations(lmjcore_env *env) {
   }
 
   // 7. 删除数组
-  rc = lmjcore_arr_del(txn, arr_ptr);
+  rc = lmjcore_set_del(txn, arr_ptr);
   print_test_result("lmjcore_arr_del", rc, LMJCORE_SUCCESS);
 
   // 8. 检查数组是否已删除
@@ -394,10 +394,10 @@ static void test_audit_repair(lmjcore_env *env) {
   print_test_result("lmjcore_audit_object", rc, LMJCORE_SUCCESS);
 
   if (rc == LMJCORE_SUCCESS) {
-    printf("审计发现的幽灵成员数量: %zu\n", report->audit_cont);
+    printf("审计发现的幽灵成员数量: %zu\n", report->audit_count);
 
     // 打印幽灵成员信息
-    for (size_t i = 0; i < report->audit_cont; i++) {
+    for (size_t i = 0; i < report->audit_count; i++) {
       lmjcore_audit_descriptor *desc = &report->audit_descriptor[i];
       char *member_name =
           (char *)(report_buf + desc->member.member_name.value_offset);
@@ -416,7 +416,7 @@ static void test_audit_repair(lmjcore_env *env) {
   rc = lmjcore_audit_object(txn, obj_ptr, report_buf, sizeof(report_buf),
                             &report);
   if (rc == LMJCORE_SUCCESS) {
-    printf("修复后幽灵成员数量: %zu\n", report->audit_cont);
+    printf("修复后幽灵成员数量: %zu\n", report->audit_count);
   }
 
   lmjcore_txn_commit(txn);

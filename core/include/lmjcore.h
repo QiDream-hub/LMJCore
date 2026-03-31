@@ -242,8 +242,8 @@ extern "C" {
 
 // 实体类型枚举
 typedef enum {
-  LMJCORE_OBJ = 0x01, // 对象类型
-  LMJCORE_ARR = 0x02, // 数组类型
+  LMJCORE_OBJ = 0x01, // 对象类型（键值容器）
+  LMJCORE_SET = 0x02, // 集合类型（无序元素容器，自动去重排序）
 } lmjcore_entity_type;
 
 // 17字节实体指针类型
@@ -263,19 +263,19 @@ typedef int (*lmjcore_ptr_generator_fn)(void *ctx,
 typedef struct {
   int error_code; // 错误码
   struct {
-    size_t element_offset; // 成员名或数组元素在缓冲区中的偏移量
-    size_t element_len;    // 成员名或数组元素长度
+    size_t element_offset; // 成员名或集合元素在缓冲区中的偏移量
+    size_t element_len;    // 成员名或集合元素长度
   } element;
   lmjcore_ptr entity_ptr; // 发生错误的实体指针
 } lmjcore_read_error;
 
-// 描述符基础展示单元(一个数组的元素,一个对象的成员名,或者成员的值)
+// 描述符基础展示单元（集合的一个元素，或对象的一个成员名/值）
 typedef struct {
   size_t value_offset; // 元素值在缓冲区中的偏移
   size_t value_len;    // 元素值长度
 } lmjcore_descriptor;
 
-// 一个完整的成员
+// 一个完整的成员（仅用于对象）
 typedef struct {
   lmjcore_descriptor member_name;
   lmjcore_descriptor member_value;
@@ -291,14 +291,14 @@ typedef struct {
 
 } lmjcore_result_obj;
 
-// 数组返回体
+// 集合返回体
 typedef struct {
   size_t error_count;                                 // 错误统计
   lmjcore_read_error errors[LMJCORE_MAX_READ_ERRORS]; // 错误数组
 
   size_t element_count; // 元素统计
   lmjcore_descriptor elements[];
-} lmjcore_result_arr;
+} lmjcore_result_set;
 
 // 审计条目描述符
 typedef struct {
@@ -308,7 +308,7 @@ typedef struct {
 
 // 审计报告结构
 typedef struct {
-  size_t audit_cont;                           // 审计条目数量
+  size_t audit_count;                          // 审计条目数量
   lmjcore_audit_descriptor audit_descriptor[]; // 审计条目数组
 } lmjcore_audit_report;
 
@@ -402,7 +402,7 @@ int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr);
  *
  * 结果将写入调用方提供的缓冲区，内存布局如下：
  * +------------------------+ ← result_buf
- * | lmjcore_result         | 固定头部
+ * | lmjcore_result_obj     | 固定头部
  * +------------------------+
  * | member_descriptors[]   | 描述符数组（从前向后增长）
  * +------------------------+
@@ -423,15 +423,12 @@ int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                     lmjcore_result_obj **result_head);
 
 /**
- * @brief 完全删除对象成员（包括注册信息和值）
+ * @brief 完全删除对象（包括所有成员）
  *
- * 同时从 arr 库的成员列表和 main 库的键值对中删除该成员。
- * 注意：会先删除 main 中的值（如果存在），再删除 arr 中的注册。
+ * 同时删除 set 库中的成员列表和 main 库中的所有成员值。
  *
  * @param txn 有效的写事务句柄
  * @param obj_ptr 目标对象指针
- * @param member_name 成员名称（二进制安全字节序列）
- * @param member_name_len 成员名称长度
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr);
@@ -440,18 +437,18 @@ int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr);
  * @brief 获取对象的成员列表
  *
  * 结果写入调用方提供的 result_buf 缓冲区，采用紧凑布局：
- *  [ lmjcore_result_arr头部 | element_descriptor数组 | 元素数据（从后向前） ]
+ *  [ lmjcore_result_set头部 | element_descriptor数组 | 元素数据（从后向前） ]
  *
  * @param txn 有效事务句柄
- * @param obj_ptr 数组指针
+ * @param obj_ptr 对象指针
  * @param result_buf 输出缓冲区
  * @param result_buf_size 缓冲区大小
- * @param result_head 输出：指向 result_buf 中 lmjcore_result_arr 结构的指针
+ * @param result_head 输出：指向 result_buf 中 lmjcore_result_set 结构的指针
  * @return 错误码（LMJCORE_SUCCESS 表示成功，即使有语义错误也视为成功）
  */
 int lmjcore_obj_member_list(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                             uint8_t *result_buf, size_t result_buf_size,
-                            lmjcore_result_arr **result_head);
+                            lmjcore_result_set **result_head);
 
 /**
  * @brief 获取对象指定成员的值
@@ -488,7 +485,7 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 /**
  * @brief 注册对象成员（仅注册名称，不设置值）
  *
- * 在 arr 库的对象成员列表中写入成员名，但在 main 库中不写入对应的值。
+ * 在 set 库的对象成员列表中写入成员名，但在 main 库中不写入对应的值。
  * 操作后该成员处于"缺失值"(Missing Value)状态，属于合法中间状态。
  * 适用场景：
  * - 结构先行（Schema-first）设计
@@ -508,7 +505,7 @@ int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 /**
  * @brief 删除对象成员的值（保留成员注册）
  *
- * 仅删除 main 数据库中该成员的值，但成员名仍保留在 arr 库的成员列表中。
+ * 仅删除 main 数据库中该成员的值，但成员名仍保留在 set 库的成员列表中。
  * 操作后该成员状态变为"缺失值"(Missing Value)。
  *
  * @param txn 有效的写事务句柄
@@ -524,7 +521,7 @@ int lmjcore_obj_member_value_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 /**
  * @brief 完全删除对象成员（包括注册信息）
  *
- * 同时从 arr 库的成员列表和 main 库的键值对中删除该成员。
+ * 同时从 set 库的成员列表和 main 库的键值对中删除该成员。
  * 操作后该成员不再属于该对象。
  *
  * @param txn 有效的写事务句柄
@@ -541,7 +538,7 @@ int lmjcore_obj_member_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 /**
  * @brief 统计对象所有成员值的总长度和数量
  *
- * 注意：可能统计到幽灵成员，建议与数组统计配合进行完整性校验。
+ * 注意：可能统计到幽灵成员，建议与审计函数配合进行完整性校验。
  *
  * @param txn 有效的读事务句柄
  * @param obj_ptr 目标对象指针
@@ -554,96 +551,116 @@ int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                             size_t *total_value_count_out);
 
 /**
- * @brief 统计数组的元素总长度和数量
+ * @brief 统计对象的成员数量
  *
  * @param txn 有效的读事务句柄
- * @param obj_ptr 数组指针
- * @param total_member_len_out 输出参数，元素值总长度
- * @param member_count_out 输出参数，元素总数量
+ * @param obj_ptr 对象指针
+ * @param total_member_len_out 输出参数，成员名总长度
+ * @param member_count_out 输出参数，成员总数量
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_obj_stat_members(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                              size_t *total_member_len_out,
                              size_t *member_count_out);
-// ==================== 数组操作 ====================
+
+// ==================== 集合操作 ====================
 
 /**
- * @brief 创建一个空数组实体
+ * @brief 创建一个空集合实体
  *
  * @param txn 有效的写事务句柄
- * @param ptr_out 输出参数，返回新数组的指针
+ * @param ptr_out 输出参数，返回新集合的指针
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
-int lmjcore_arr_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
+int lmjcore_set_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
 
 /**
- * @brief 向数组末尾追加一个元素
+ * @brief 向集合中添加一个元素
+ *
+ * 集合是无序的，元素会自动去重并按字典序排序。
+ * 重复添加相同元素会返回 LMJCORE_ERROR_MEMBER_EXISTS。
  *
  * @param txn 有效的写事务句柄
- * @param arr_ptr 目标数组指针
- * @param value 待追加的元素值（二进制安全字节序列）
+ * @param set_ptr 目标集合指针
+ * @param value 待添加的元素值（二进制安全字节序列）
  * @param value_len 元素值长度
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
-int lmjcore_arr_append(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
-                       const uint8_t *value, size_t value_len);
+int lmjcore_set_add(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
+                    const uint8_t *value, size_t value_len);
 
 /**
- * @brief 获取数组的所有元素
+ * @brief 获取集合的所有元素
  *
  * 结果写入调用方提供的 result_buf 缓冲区，采用紧凑布局：
- *  [ lmjcore_result_arr头部 | element_descriptor数组 | 元素数据（从后向前） ]
+ *  [ lmjcore_result_set头部 | element_descriptor数组 | 元素数据（从后向前） ]
+ *
+ * 注意：返回的元素按字典序排序（自动排序，非插入顺序）。
  *
  * @param txn 有效事务句柄
- * @param arr_ptr 数组指针
+ * @param set_ptr 集合指针
  * @param result_buf 输出缓冲区
  * @param result_buf_size 缓冲区大小
- * @param result_head 输出：指向 result_buf 中 lmjcore_result_arr 结构的指针
+ * @param result_head 输出：指向 result_buf 中 lmjcore_result_set 结构的指针
  * @return 错误码（LMJCORE_SUCCESS 表示成功，即使有语义错误也视为成功）
  */
-int lmjcore_arr_get(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
+int lmjcore_set_get(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
                     uint8_t *result_buf, size_t result_buf_size,
-                    lmjcore_result_arr **result_head);
+                    lmjcore_result_set **result_head);
 
 /**
- * @brief 完全删除指定数组及其所有元素
+ * @brief 完全删除指定集合及其所有元素
  *
  * 执行以下操作：
- * 1. 删除 arr 库中该数组指针对应的所有元素
- * 2. 数组指针变为无效
+ * 1. 删除 set 库中该集合指针对应的所有元素
+ * 2. 集合指针变为无效
  *
  * @param txn 有效的写事务句柄
- * @param arr_ptr 待删除的数组指针
+ * @param set_ptr 待删除的集合指针
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
-int lmjcore_arr_del(lmjcore_txn *txn, const lmjcore_ptr arr_ptr);
+int lmjcore_set_del(lmjcore_txn *txn, const lmjcore_ptr set_ptr);
 
 /**
- * @brief 删除数组中指定的元素（按值匹配）
+ * @brief 从集合中删除指定的元素（按值匹配）
  *
  * @param txn 有效的写事务句柄
- * @param arr_ptr 目标数组指针
+ * @param set_ptr 目标集合指针
  * @param element 待删除的元素值（二进制安全字节序列）
  * @param element_len 元素值长度
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
-int lmjcore_arr_element_del(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
-                            const uint8_t *element, size_t element_len);
-
-// ==================== 数组工具函数 ====================
+int lmjcore_set_remove(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
+                       const uint8_t *element, size_t element_len);
 
 /**
- * @brief 统计数组的元素总长度和数量
+ * @brief 检查集合中是否存在指定元素
  *
  * @param txn 有效的读事务句柄
- * @param arr_ptr 数组指针
+ * @param set_ptr 目标集合指针
+ * @param element 待检查的元素值（二进制安全字节序列）
+ * @param element_len 元素值长度
+ * @return int
+ *   - 1: 元素存在
+ *   - 0: 元素不存在
+ *   - <0: 操作失败，返回错误码
+ */
+int lmjcore_set_contains(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
+                         const uint8_t *element, size_t element_len);
+
+// ==================== 集合工具函数 ====================
+
+/**
+ * @brief 统计集合的元素总长度和数量
+ *
+ * @param txn 有效的读事务句柄
+ * @param set_ptr 集合指针
  * @param total_value_len_out 输出参数，元素值总长度
  * @param element_count_out 输出参数，元素总数量
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
-int lmjcore_arr_stat_element(lmjcore_txn *txn, const lmjcore_ptr arr_ptr,
-                             size_t *total_value_len_out,
-                             size_t *element_count_out);
+int lmjcore_set_stat(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
+                     size_t *total_value_len_out, size_t *element_count_out);
 
 // ==================== 指针工具函数 ====================
 

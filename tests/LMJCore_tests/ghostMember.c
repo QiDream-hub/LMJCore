@@ -75,9 +75,9 @@ static void print_audit_report(const lmjcore_audit_report *report,
   }
 
   printf("=== 审计报告 ===\n");
-  printf("发现 %zu 个幽灵成员:\n", report->audit_cont);
+  printf("发现 %zu 个幽灵成员:\n", report->audit_count);
 
-  for (size_t i = 0; i < report->audit_cont; i++) {
+  for (size_t i = 0; i < report->audit_count; i++) {
     const lmjcore_audit_descriptor *desc = &report->audit_descriptor[i];
 
     // 打印指针
@@ -128,8 +128,8 @@ static int verify_no_ghost_members(lmjcore_env *env,
   rc = lmjcore_audit_object(txn, obj_ptr, report_buf, report_buf_size, &report);
 
   if (rc == LMJCORE_SUCCESS) {
-    if (report->audit_cont > 0) {
-      printf("❌ 发现 %zu 个幽灵成员未修复\n", report->audit_cont);
+    if (report->audit_count > 0) {
+      printf("❌ 发现 %zu 个幽灵成员未修复\n", report->audit_count);
       print_audit_report(report, report_buf);
       rc = -1; // 自定义错误码，表示存在幽灵成员
     } else {
@@ -256,7 +256,7 @@ int main() {
   // 6. 修复幽灵成员
   printf("\n--- 步骤4: 修复幽灵成员 ---\n");
 
-  if (report && report->audit_cont > 0) {
+  if (report && report->audit_count > 0) {
     // 打开写事务进行修复
     rc = lmjcore_txn_begin(env, NULL, 0, &txn);
     if (rc != LMJCORE_SUCCESS) {
@@ -268,7 +268,7 @@ int main() {
 
     rc = lmjcore_repair_object(txn, report_buf, report_buf_size, report);
     if (rc == LMJCORE_SUCCESS) {
-      printf("✅ 修复成功，删除了 %zu 个幽灵成员\n", report->audit_cont);
+      printf("✅ 修复成功，删除了 %zu 个幽灵成员\n", report->audit_count);
     } else {
       fprintf(stderr, "修复失败: %d\n", rc);
     }

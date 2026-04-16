@@ -1,4 +1,4 @@
-#include "../include/lmjcore.h"
+#include "lmjcore.h"
 #include <lmdb.h>
 #include <stdbool.h>
 #include <stddef.h>

@@ -2,7 +2,7 @@
 #ifndef LMJCORE_RESULT_PARSER_H
 #define LMJCORE_RESULT_PARSER_H
 
-#include "../../../core/include/lmjcore.h"
+#include "lmjcore.h"
 
 #ifdef __cplusplus
 extern "C" {

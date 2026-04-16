@@ -2,7 +2,7 @@
 #ifndef LMJCORE_CONFIG_OBJECT_H
 #define LMJCORE_CONFIG_OBJECT_H
 
-#include "../../../core/include/lmjcore.h"
+#include "lmjcore.h"
 
 #ifdef __cplusplus
 extern "C" {

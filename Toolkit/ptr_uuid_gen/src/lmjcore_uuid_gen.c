@@ -1,5 +1,5 @@
 // lmjcore_uuid_gen.c
-#include "../include/lmjcore_uuid_gen.h"
+#include "lmjcore_uuid_gen.h"
 #include <string.h>
 
 // 平台检测

@@ -3,7 +3,7 @@
 # 配置（从上层继承）
 BUILD_DIR ?= ../../build
 CORE_DIR ?= ../../core
-CFLAGS += -fPIC -I$(CORE_DIR)/include
+CFLAGS += -fPIC -I$(CORE_DIR)/include -I$(CURDIR)/include
 LDFLAGS += -L$(BUILD_DIR) -llmjcore
 
 # 项目特定配置

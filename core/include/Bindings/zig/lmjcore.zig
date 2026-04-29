@@ -1,6 +1,23 @@
 const std = @import("std");
 const c = @import("c.zig").c;
 
+// === 标准化统计结构 ===
+/// 通用统计信息结构 - 用于集合和对象值统计
+pub const StatResult = struct {
+    /// 总长度（字节）
+    total_len: usize,
+    /// 数量（元素个数或成员个数）
+    count: usize,
+};
+
+/// 对象成员统计信息结构
+pub const MemberStatResult = struct {
+    /// 成员名总长度（字节）
+    total_member_len: usize,
+    /// 成员个数
+    member_count: usize,
+};
+
 // === 错误码 ===
 pub const Error = error{
     // LMJCore 专属错误（-32000 ~ -32999）
@@ -748,7 +765,7 @@ pub fn setContains(
 pub fn setStat(
     txn: *Txn,
     set_ptr: *const Ptr,
-) !struct { total_value_len: usize, element_count: usize } {
+) !StatResult {
     var total_len: usize = undefined;
     var element_count: usize = undefined;
     const rc = c.lmjcore_set_stat(
@@ -758,9 +775,9 @@ pub fn setStat(
         &element_count,
     );
     try throw(rc);
-    return .{
-        .total_value_len = total_len,
-        .element_count = element_count,
+    return StatResult{
+        .total_len = total_len,
+        .count = element_count,
     };
 }
 
@@ -805,7 +822,7 @@ pub fn repairObject(txn: *Txn, report: *AuditReport, buffer: []align(@alignOf(us
 pub fn objStatValues(
     txn: *Txn,
     obj_ptr: *const Ptr,
-) !struct { total_value_len: usize, total_value_count: usize } {
+) !StatResult {
     var total_len: usize = undefined;
     var total_count: usize = undefined;
     const rc = c.lmjcore_obj_stat_values(
@@ -815,9 +832,9 @@ pub fn objStatValues(
         &total_count,
     );
     try throw(rc);
-    return .{
-        .total_value_len = total_len,
-        .total_value_count = total_count,
+    return StatResult{
+        .total_len = total_len,
+        .count = total_count,
     };
 }
 
@@ -825,7 +842,7 @@ pub fn objStatValues(
 pub fn objStatMembers(
     txn: *Txn,
     obj_ptr: *const Ptr,
-) !struct { total_member_len: usize, member_count: usize } {
+) !MemberStatResult {
     var total_len: usize = undefined;
     var member_count: usize = undefined;
     const rc = c.lmjcore_obj_stat_members(
@@ -835,7 +852,7 @@ pub fn objStatMembers(
         &member_count,
     );
     try throw(rc);
-    return .{
+    return MemberStatResult{
         .total_member_len = total_len,
         .member_count = member_count,
     };

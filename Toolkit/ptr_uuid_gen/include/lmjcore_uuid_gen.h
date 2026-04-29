@@ -2,7 +2,7 @@
 #ifndef LMJCORE_UUID_GEN_H
 #define LMJCORE_UUID_GEN_H
 
-#include "../../../core/include/lmjcore.h"
+#include "lmjcore.h"
 
 #ifdef __cplusplus
 extern "C" {

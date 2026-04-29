@@ -1,4 +1,4 @@
-#include "../../core/include/lmjcore.h"
+#include "lmjcore.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

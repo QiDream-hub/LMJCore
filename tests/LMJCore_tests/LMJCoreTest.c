@@ -1,5 +1,5 @@
-#include "../../core/include/lmjcore.h"
-#include "../../Toolkit/ptr_uuid_gen/include/lmjcore_uuid_gen.h"
+#include "lmjcore.h"
+#include "lmjcore_uuid_gen.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

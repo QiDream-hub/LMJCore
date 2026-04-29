@@ -1,5 +1,5 @@
-#include "../../Toolkit/result_parser/include/result_parser.h"
-#include "../../core/include/lmjcore.h"
+#include "result_parser.h"
+#include "lmjcore.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

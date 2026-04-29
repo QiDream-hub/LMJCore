@@ -1,4 +1,4 @@
-#include "../include/result_parser.h"
+#include "result_parser.h"
 #include <string.h>
 
 // ==================== 对象结果解析 ====================

@@ -520,12 +520,19 @@ int lmjcore_txn_abort(lmjcore_txn *txn) {
  * 对象相关
  ==========================================
  */
-// 创建对象
-int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
+
+/**
+ * @brief 内部函数：创建实体（对象或集合）
+ * @param txn 事务句柄
+ * @param ptr_out 输出指针
+ * @param entity_type 实体类型 (LMJCORE_OBJ 或 LMJCORE_SET)
+ * @return 错误码
+ */
+static int entity_create(lmjcore_txn *txn, lmjcore_ptr ptr_out,
+                         lmjcore_entity_type entity_type) {
   if (!txn || !ptr_out) {
     return LMJCORE_ERROR_NULL_POINTER;
   }
-
   if (txn->is_read_only) {
     return LMJCORE_ERROR_READONLY_TXN;
   }
@@ -536,14 +543,13 @@ int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
     return rc;
   }
 
-  // 确保指针类型为对象
-  ptr_out[0] = LMJCORE_OBJ;
+  // 设置实体类型
+  ptr_out[0] = (uint8_t)entity_type;
 
-  // 在 set 数据库中创建空成员列表（不存储任何值，仅表示对象存在）
+  // 在 set 数据库中创建空列表（不存储任何值，仅表示实体存在）
   MDB_val key, data;
   key.mv_data = ptr_out;
   key.mv_size = LMJCORE_PTR_LEN;
-
   data.mv_data = NULL;
   data.mv_size = 0;
 
@@ -552,6 +558,11 @@ int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
     return rc;
   }
   return LMJCORE_SUCCESS;
+}
+
+// 创建对象
+int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
+  return entity_create(txn, ptr_out, LMJCORE_OBJ);
 }
 
 // 注册对象
@@ -839,7 +850,7 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   if (rc == MDB_SUCCESS) {
     // 构建主键：对象指针 + 成员名
     size_t key_size = LMJCORE_PTR_LEN + member_name_len;
-    uint8_t key[key_size];
+    uint8_t key[LMJCORE_MAX_KEY_LEN];
 
     memcpy(key, obj_ptr, LMJCORE_PTR_LEN);
     memcpy(key + LMJCORE_PTR_LEN, member_name, member_name_len);
@@ -1055,36 +1066,7 @@ int lmjcore_obj_member_list(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  */
 // 创建集合
 int lmjcore_set_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
-  if (!txn || !ptr_out) {
-    return LMJCORE_ERROR_NULL_POINTER;
-  }
-  if (txn->is_read_only) {
-    return LMJCORE_ERROR_READONLY_TXN;
-  }
-
-  // 生成指针
-  int rc = txn->env->ptr_generator(txn->env->ptr_gen_ctx, ptr_out);
-  if (rc != LMJCORE_SUCCESS) {
-    return rc;
-  }
-
-  // 确保指针类型为集合
-  ptr_out[0] = LMJCORE_SET;
-
-  // 在 set 数据库中创建空列表（不存储任何值，仅表示集合存在）
-  MDB_val key, data;
-  key.mv_data = ptr_out;
-  key.mv_size = LMJCORE_PTR_LEN;
-
-  data.mv_data = NULL;
-  data.mv_size = 0;
-
-  rc = mdb_put(txn->mdb_txn, txn->env->set_dbi, &key, &data, 0);
-  if (rc != MDB_SUCCESS) {
-    return rc;
-  }
-
-  return LMJCORE_SUCCESS;
+  return entity_create(txn, ptr_out, LMJCORE_SET);
 }
 
 // 向集合添加元素
@@ -1402,7 +1384,7 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
 
     // 构建幽灵成员的完整key: <LMJCORE_PTR_LEN字节指针> + <成员名>
     size_t key_len = LMJCORE_PTR_LEN + desc->member.member_name.value_len;
-    uint8_t ghost_key[key_len];
+    uint8_t ghost_key[LMJCORE_MAX_KEY_LEN];
 
     memcpy(ghost_key, desc->ptr, LMJCORE_PTR_LEN);
     memcpy(ghost_key + LMJCORE_PTR_LEN,

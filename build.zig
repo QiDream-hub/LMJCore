@@ -33,10 +33,11 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("example.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
         }),
     });
 
-    example.linkLibC();
+    // example.linkLibC();
     example.root_module.addImport("lmjcore", lmcore_module);
 
     // 添加包含路径到示例模块（重要！）

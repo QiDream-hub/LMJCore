@@ -22,20 +22,24 @@ static const uint8_t LMJCORE_CONFIG_OBJECT_PTR[LMJCORE_PTR_LEN] = {
 const lmjcore_ptr *lmjcore_config_object_ptr();
 
 /**
- * @brief 确保配置对象存在（惰性初始化）
+ * @brief 确保配置对象可用（惰性初始化）
  *
- * 如果配置对象不存在，则创建空的配置对象。
- * 此函数应在访问配置对象前调用以确保可用性。
+ * 空实体在语义上不存在：配置对象使用固定指针，它在首次写入配置项之前
+ * 并不存在（lmjcore_entity_exist 返回 0）。lmjcore_config_set 内部的成
+ * 员写入会自动创建它，因此本函数只做事务校验，不会、也无需预先生成一
+ * 个空对象。
  *
  * @param txn 写事务
  * @return int
- *   - LMJCORE_SUCCESS: 配置对象已存在或创建成功
- *   - 其他错误码: 创建失败
+ *   - LMJCORE_SUCCESS: 事务有效，可以写入配置项
+ *   - 其他错误码: 参数错误
  */
 int lmjcore_config_object_ensure(lmjcore_txn *txn);
 
 /**
  * @brief 检查配置对象是否存在
+ *
+ * 配置对象拥有至少一个配置项时才存在（空对象不存在）。
  *
  * @param txn 读事务
  * @return int
@@ -48,11 +52,11 @@ int lmjcore_config_object_exist(lmjcore_txn *txn);
 /**
  * @brief 设置配置项
  *
- * 等同于 lmjcore_obj_member_put，但自动确保配置对象存在
+ * 等同于 lmjcore_obj_member_put，配置对象不存在时由本次写入自动创建
  *
  * @param txn 写事务
  * @param key 配置项名称
- * @param key_len 名称长度
+ * @param key_len 名称长度（必须 > 0）
  * @param value 配置值
  * @param value_len 值长度
  * @return int

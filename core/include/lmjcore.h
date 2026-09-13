@@ -374,28 +374,19 @@ int lmjcore_txn_abort(lmjcore_txn *txn);
 // ==================== 对象操作 ====================
 
 /**
- * @brief 创建一个空对象实体
+ * @brief 创建一个新对象并返回其指针
+ *
+ * 本函数只生成一个新指针并写入对象类型字节，**不向存储写入任何内容**。
+ * 空实体在语义上不存在：对象在首次写入成员（lmjcore_obj_member_put /
+ * lmjcore_obj_member_register）之前，lmjcore_entity_exist 返回 0；
+ * 最后一个成员被删除后对象同样消失。因此不需要、也不存在"注册空对象"
+ * 的操作——向尚未存在的对象写入成员即等同于向空对象写入第一个成员。
  *
  * @param txn 有效的写事务句柄
  * @param ptr_out 输出参数，返回新对象的指针
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
-
-/**
- * @brief 注册指定指针的对象（如不存在则创建空对象）
- *
- * 此函数为高级操作，绕过默认指针生成机制，请谨慎使用。
- * 典型应用场景：
- * - 系统根对象的固定化（如配置根、用户根等）
- * - 迁移场景中重新声明已知指针
- * - 测试环境中构造特定指针的对象
- *
- * @param txn 有效的写事务句柄
- * @param ptr 待注册的 17 字节对象指针
- * @return int 错误码（LMJCORE_SUCCESS 表示成功）
- */
-int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr);
 
 /**
  * @brief 获取指定对象的完整内容
@@ -417,6 +408,9 @@ int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr);
  * @param result_buf_size 输出缓冲区大小
  * @param result_head 输出参数，指向结果头部的指针
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ *
+ * 对象为空（无任何成员，因而不存在）时仍返回 LMJCORE_SUCCESS，并在结果
+ * 的 errors 中记录一条 LMJCORE_ERROR_ENTITY_NOT_FOUND。
  */
 int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                     uint8_t *result_buf, size_t result_buf_size,
@@ -429,7 +423,9 @@ int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  *
  * @param txn 有效的写事务句柄
  * @param obj_ptr 目标对象指针
- * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ * @return int 错误码
+ *   - LMJCORE_SUCCESS: 成功
+ *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 对象为空（无任何成员）因而不存在
  */
 int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr);
 
@@ -460,7 +456,10 @@ int lmjcore_obj_member_list(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  * @param value_buf 输出缓冲区，用于接收成员值
  * @param value_buf_size 输出缓冲区大小
  * @param value_size_out 输出参数，返回实际值的长度
- * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ * @return int 错误码
+ *   - LMJCORE_SUCCESS: 成功
+ *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 对象为空（无任何成员）因而不存在
+ *   - LMJCORE_ERROR_MEMBER_NOT_FOUND: 成员不存在（缺失值或未注册）
  */
 int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                            const uint8_t *member_name, size_t member_name_len,
@@ -470,10 +469,13 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 /**
  * @brief 设置或更新对象成员的值
  *
+ * 不检查对象是否存在：空对象在语义上不存在，向"不存在的对象"写入成员
+ * 即等同于向空对象写入第一个成员，对象由此产生。
+ *
  * @param txn 有效的写事务句柄
  * @param obj_ptr 目标对象指针
- * @param member_name 成员名称（二进制安全字节序列）
- * @param member_name_len 成员名称长度
+ * @param member_name 成员名称（二进制安全字节序列，不允许为空）
+ * @param member_name_len 成员名称长度（必须 > 0）
  * @param value 待写入的成员值（二进制安全字节序列）
  * @param value_len 值的长度
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
@@ -487,6 +489,7 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  *
  * 在 set 库的对象成员列表中写入成员名，但在 main 库中不写入对应的值。
  * 操作后该成员处于"缺失值"(Missing Value)状态，属于合法中间状态。
+ * 该操作同时会让空对象（不存在）变为存在。
  * 适用场景：
  * - 结构先行（Schema-first）设计
  * - 分步初始化复杂对象
@@ -494,8 +497,8 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  *
  * @param txn 有效的写事务句柄
  * @param obj_ptr 目标对象指针
- * @param member_name 成员名称（二进制安全字节序列）
- * @param member_name_len 成员名称长度
+ * @param member_name 成员名称（二进制安全字节序列，不允许为空）
+ * @param member_name_len 成员名称长度（必须 > 0）
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
@@ -557,7 +560,9 @@ int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  * @param obj_ptr 对象指针
  * @param total_member_len_out 输出参数，成员名总长度
  * @param member_count_out 输出参数，成员总数量
- * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ * @return int 错误码
+ *   - LMJCORE_SUCCESS: 成功
+ *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 对象为空（无任何成员）因而不存在
  */
 int lmjcore_obj_stat_members(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                              size_t *total_member_len_out,
@@ -566,7 +571,12 @@ int lmjcore_obj_stat_members(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 // ==================== 集合操作 ====================
 
 /**
- * @brief 创建一个空集合实体
+ * @brief 创建一个新集合并返回其指针
+ *
+ * 本函数只生成一个新指针并写入集合类型字节，**不向存储写入任何内容**。
+ * 空集合在语义上不存在：集合在首次写入元素（lmjcore_set_add）之前，
+ * lmjcore_entity_exist 返回 0；最后一个元素被删除后集合同样消失。
+ * 向尚未存在的集合添加元素即等同于向空集合添加第一个元素。
  *
  * @param txn 有效的写事务句柄
  * @param ptr_out 输出参数，返回新集合的指针
@@ -580,10 +590,13 @@ int lmjcore_set_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
  * 集合是无序的，元素会自动去重并按字典序排序。
  * 重复添加相同元素会返回 LMJCORE_ERROR_MEMBER_EXISTS。
  *
+ * 不检查集合是否存在：空集合在语义上不存在，向"不存在的集合"添加元素
+ * 即等同于向空集合添加第一个元素，集合由此产生。
+ *
  * @param txn 有效的写事务句柄
  * @param set_ptr 目标集合指针
- * @param value 待添加的元素值（二进制安全字节序列）
- * @param value_len 元素值长度
+ * @param value 待添加的元素值（二进制安全字节序列，不允许为空）
+ * @param value_len 元素值长度（必须 > 0）
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_set_add(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
@@ -617,7 +630,9 @@ int lmjcore_set_get(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
  *
  * @param txn 有效的写事务句柄
  * @param set_ptr 待删除的集合指针
- * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ * @return int 错误码
+ *   - LMJCORE_SUCCESS: 成功
+ *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 集合为空（无任何元素）因而不存在
  */
 int lmjcore_set_del(lmjcore_txn *txn, const lmjcore_ptr set_ptr);
 
@@ -626,8 +641,8 @@ int lmjcore_set_del(lmjcore_txn *txn, const lmjcore_ptr set_ptr);
  *
  * @param txn 有效的写事务句柄
  * @param set_ptr 目标集合指针
- * @param element 待删除的元素值（二进制安全字节序列）
- * @param element_len 元素值长度
+ * @param element 待删除的元素值（二进制安全字节序列，不允许为空）
+ * @param element_len 元素值长度（必须 > 0）
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  */
 int lmjcore_set_remove(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
@@ -636,13 +651,16 @@ int lmjcore_set_remove(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
 /**
  * @brief 检查集合中是否存在指定元素
  *
+ * 按 value 精确匹配（set 库为重复键数据库，同一集合下可能存有多个元素）。
+ * 集合为空（不存在）时返回 0。
+ *
  * @param txn 有效的读事务句柄
  * @param set_ptr 目标集合指针
- * @param element 待检查的元素值（二进制安全字节序列）
- * @param element_len 元素值长度
+ * @param element 待检查的元素值（二进制安全字节序列，不允许为空）
+ * @param element_len 元素值长度（必须 > 0）
  * @return int
  *   - 1: 元素存在
- *   - 0: 元素不存在
+ *   - 0: 元素不存在（集合为空或没有该元素）
  *   - <0: 操作失败，返回错误码
  */
 int lmjcore_set_contains(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
@@ -657,7 +675,9 @@ int lmjcore_set_contains(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
  * @param set_ptr 集合指针
  * @param total_value_len_out 输出参数，元素值总长度
  * @param element_count_out 输出参数，元素总数量
- * @return int 错误码（LMJCORE_SUCCESS 表示成功）
+ * @return int 错误码
+ *   - LMJCORE_SUCCESS: 成功
+ *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 集合为空（无任何元素）因而不存在
  */
 int lmjcore_set_stat(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
                      size_t *total_value_len_out, size_t *element_count_out);
@@ -689,11 +709,16 @@ int lmjcore_ptr_from_string(const char *str, lmjcore_ptr ptr_out);
 /**
  * @brief 检查指定指针是否指向有效实体
  *
+ * 实体的存在性由 set 库中该指针键下是否存在至少一个 value 定义：
+ * - 刚由 lmjcore_obj_create / lmjcore_set_create 产生、尚未写入任何
+ *   成员/元素的指针返回 0（空实体不存在）；
+ * - 最后一个成员/元素被删除后同样返回 0。
+ *
  * @param txn 有效的读事务句柄
  * @param ptr 待检查的指针
  * @return int
- *   - 1: 实体存在
- *   - 0: 实体不存在
+ *   - 1: 实体存在（至少拥有一个成员/元素）
+ *   - 0: 实体不存在（空实体或从未写入过）
  *   - <0: 操作失败，返回错误码
  */
 int lmjcore_entity_exist(lmjcore_txn *txn, const lmjcore_ptr ptr);

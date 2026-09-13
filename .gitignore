@@ -5,6 +5,7 @@ build/**
 **.so
 .zig-cache
 zig-out
+zig-pkg
 .qwen
 .cache
 compile_commands.json

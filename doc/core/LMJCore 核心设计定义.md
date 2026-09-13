@@ -115,9 +115,24 @@ LMJCore 使用两个 LMDB 数据库协同工作：
 
 |状态|判定条件|
 |---|---|
-|**有效实体**|指针在 `set` 中存在至少一个条目|
-|**无效指针**|`set` 中无对应 Key|
-|**空实体**|`set` 中存在 Key，但无任何 Value（合法状态）|
+|**有效实体**|指针在 `set` 中存在至少一个条目（≥ 1 个 value）|
+|**空实体 / 不存在**|`set` 中无对应 Key（刚创建尚未写入成员/元素，或成员/元素已被全部删除）|
+
+> ⚠️ `set` 启用了重复键（`MDB_DUPSORT`），**不允许 0 长度 value**：键已存在时写入 0 长度
+> value 会返回 `MDB_BAD_VALSIZE`；只有键不存在时才被 LMDB 勉强接受，且会被第一个真实
+> value 静默覆盖。因此内核**不使用"空标记"表示实体存在**——空实体在语义上不存在。
+>
+> ✅ `lmjcore_obj_create()` / `lmjcore_set_create()` **只生成指针、不写存储**；实体在首次
+> 写入成员/元素时才真正产生。写入侧（`lmjcore_set_add()` / `lmjcore_obj_member_put()` /
+> `lmjcore_obj_member_register()`）**不做存在性检查**：向不存在的实体写入即等同于向空实体
+> 写入第一个成员/元素。
+>
+> ✅ 由此也不存在"注册空实体"的操作（`lmjcore_obj_register()` 已移除）。
+>
+> ⚠️ 空实体上的操作：`lmjcore_entity_exist()` 返回 0；`lmjcore_obj_get()` /
+> `lmjcore_set_get()` 仍在结果中记录 `LMJCORE_ERROR_ENTITY_NOT_FOUND` 错误位；
+> `lmjcore_set_stat()` / `lmjcore_obj_stat_members()` / `lmjcore_obj_del()` /
+> `lmjcore_set_del()` 返回 `LMJCORE_ERROR_ENTITY_NOT_FOUND`。
 
 > ✅ 此规则为系统基础语义，上层可在此基础上构建缓存或懒加载策略。
 
@@ -157,6 +172,8 @@ LMJCore 使用两个 LMDB 数据库协同工作：
 ### 4.5 成员名长度限制
 
 - `main` Key = 17B 指针 + 成员名 ≤ 511B → **成员名 ≤ 493 字节**
+- 成员名/集合元素**不允许为空（0 字节）**：`set` 库为重复键数据库，0 长度 value 非法，
+  返回 `LMJCORE_ERROR_INVALID_PARAM`
 - 所有 `put` 操作前置校验，超限返回 `LMJCORE_ERR_MEMBER_TOO_LONG`
 
 ---

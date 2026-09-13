@@ -597,18 +597,11 @@ pub fn txnAbort(txn: *Txn) void {
 }
 
 // 对象创建
+// 只生成指针、不写存储：空实体不存在，写入第一个成员后实体才产生
 pub fn objCreate(txn: *Txn, ptr_out: *Ptr) !void {
     const rc = c.lmjcore_obj_create(
         @as(*c.lmjcore_txn, @ptrCast(txn)),
         mutPtrToC(ptr_out),
-    );
-    try throw(rc);
-}
-
-pub fn objRegister(txn: *Txn, ptr: *const Ptr) !void {
-    const rc = c.lmjcore_obj_register(
-        @as(*c.lmjcore_txn, @ptrCast(txn)),
-        ptrToC(ptr),
     );
     try throw(rc);
 }

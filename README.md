@@ -193,6 +193,7 @@ if (report->audit_count > 0) {
 | **`main` 数据库** | 存储具体值，Key = `[指针][成员名]`，点查 O(1) |
 | **缺失值** | `set` 中有成员名但 `main` 中无值 → 合法中间状态 |
 | **幽灵成员** | `main` 中有值但 `set` 中未注册 → 数据损坏 |
+| **空实体** | 不存在：`create` 只生成指针，实体在首次写入成员/元素时才产生 |
 
 ### 集合 vs 对象
 
@@ -205,6 +206,10 @@ if (report->audit_count > 0) {
 | **典型场景** | 配置、用户信息、文档 | 标签、权限组、唯一值列表 |
 
 > ⚠️ **重要**：集合**不保留插入顺序**，按字典序自动排序。若需有序列表，请在 Value 中编码下标（如前 4 字节）。
+>
+> ⚠️ **空实体不存在**：`lmjcore_obj_create()` / `lmjcore_set_create()` 只生成指针，不写存储；
+> 实体在首次写入成员/元素时才产生（写入侧不做存在性检查），最后一个成员/元素被删除后实体
+> 随之消失，`lmjcore_entity_exist()` 返回 0。成员名/集合元素**不允许为空**。
 
 想深入了解？请阅读：
 - [LMJCore 核心存储模型](docs/LMJCore%20核心存储模型.md)
@@ -236,7 +241,6 @@ bool lmjcore_txn_is_read_only(lmjcore_txn *txn);
 ### 对象操作
 ```c
 int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
-int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr);
 int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                     uint8_t *result_buf, size_t result_buf_size,
                     lmjcore_result_obj **result_head);

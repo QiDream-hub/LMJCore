@@ -24,13 +24,13 @@ void test_config_basic_operations() {
   int exist = lmjcore_config_object_exist(txn);
   assert(exist == 0);
 
-  // 测试2: 确保配置对象存在
+  // 测试2: 准备配置对象（空实体不存在，这里只做事务校验）
   ret = lmjcore_config_object_ensure(txn);
   assert(ret == LMJCORE_SUCCESS);
 
-  // 测试3: 确认配置对象现在存在
+  // 测试3: 尚未写入任何配置项，配置对象仍不存在
   exist = lmjcore_config_object_exist(txn);
-  assert(exist == 1);
+  assert(exist == 0);
 
   // 测试4: 设置配置项
   const char *test_key = "database.host";
@@ -38,6 +38,10 @@ void test_config_basic_operations() {
   ret = lmjcore_config_set(txn, (const uint8_t *)test_key, strlen(test_key),
                            (const uint8_t *)test_value, strlen(test_value));
   assert(ret == LMJCORE_SUCCESS);
+
+  // 测试4.1: 写入第一个配置项后，配置对象才真正存在
+  exist = lmjcore_config_object_exist(txn);
+  assert(exist == 1);
 
   // 测试5: 获取配置项
   uint8_t value_buf[256];
@@ -144,6 +148,12 @@ void test_config_error_handling() {
   assert(ret == LMJCORE_SUCCESS);
 
   ret = lmjcore_config_object_ensure(txn);
+  assert(ret == LMJCORE_SUCCESS);
+
+  // 测试2.1: 空实体不存在——先写入一个配置项，配置对象才真正存在
+  const char *other_key = "another.key";
+  ret = lmjcore_config_set(txn, (const uint8_t *)other_key, strlen(other_key),
+                           (const uint8_t *)"v", 1);
   assert(ret == LMJCORE_SUCCESS);
 
   // 现在尝试获取不存在的配置项

@@ -6,22 +6,17 @@ const lmjcore_ptr *lmjcore_config_object_ptr() {
   return (const lmjcore_ptr *)&LMJCORE_CONFIG_OBJECT_PTR;
 }
 
+// 确保配置对象可用
+//
+// 注意：空实体在语义上不存在。配置对象使用固定指针，其存在性同样由 set 库
+// 决定——在首次写入配置项之前它并不存在，而 lmjcore_obj_member_put 本身
+// 就会创建它，因此这里无需（也无法）预先生成一个空对象。
 int lmjcore_config_object_ensure(lmjcore_txn *txn) {
   if (!txn) {
     return LMJCORE_ERROR_INVALID_PARAM;
   }
 
-  // 检查配置对象是否已存在
-  int exist = lmjcore_config_object_exist(txn);
-  if (exist < 0) {
-    return exist; // 返回错误
-  }
-  if (exist == 1) {
-    return LMJCORE_SUCCESS; // 已存在，直接返回成功
-  }
-
-  // 配置对象不存在，创建空配置对象
-  return lmjcore_obj_register(txn, LMJCORE_CONFIG_OBJECT_PTR);
+  return LMJCORE_SUCCESS;
 }
 
 int lmjcore_config_object_exist(lmjcore_txn *txn) {

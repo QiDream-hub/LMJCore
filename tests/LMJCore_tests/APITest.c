@@ -136,15 +136,25 @@ static void test_object_operations(lmjcore_env *env) {
   print_test_result("lmjcore_obj_create", rc, LMJCORE_SUCCESS);
   print_ptr("创建的对象", obj_ptr);
 
-  // 2. 检查实体存在性
+  // 2. 空实体不存在：只生成了指针，尚未写入任何成员
   rc = lmjcore_entity_exist(txn, obj_ptr);
-  print_test_result("lmjcore_entity_exist (应为1)", rc, 1);
+  print_test_result("lmjcore_entity_exist (空对象应为0)", rc, 0);
 
-  // 3. 注册对象成员（仅注册名称）
+  // 2.1 空实体的统计返回 ENTITY_NOT_FOUND
+  size_t empty_len = 0, empty_count = 0;
+  rc = lmjcore_obj_stat_members(txn, obj_ptr, &empty_len, &empty_count);
+  print_test_result("lmjcore_obj_stat_members (空对象)", rc,
+                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
+
+  // 3. 注册对象成员（仅注册名称）——不存在即等同于向空对象写入第一个成员
   const char *member1 = "name";
   rc = lmjcore_obj_member_register(txn, obj_ptr, (const uint8_t *)member1,
                                    strlen(member1));
   print_test_result("lmjcore_obj_member_register", rc, LMJCORE_SUCCESS);
+
+  // 3.1 写入第一个成员后，对象才真正存在
+  rc = lmjcore_entity_exist(txn, obj_ptr);
+  print_test_result("lmjcore_entity_exist (有成员应为1)", rc, 1);
 
   // 4. 设置成员值
   const char *name_value = "Test Object";
@@ -239,6 +249,10 @@ static void test_object_operations(lmjcore_env *env) {
                               strlen(member2));
   print_test_result("lmjcore_obj_member_del", rc, LMJCORE_SUCCESS);
 
+  // 14.1 此时仅剩 'name' 的成员注册（值已删），对象仍然存在
+  rc = lmjcore_entity_exist(txn, obj_ptr);
+  print_test_result("lmjcore_entity_exist (仍有成员注册应为1)", rc, 1);
+
   // 15. 删除对象
   rc = lmjcore_obj_del(txn, obj_ptr);
   print_test_result("lmjcore_obj_del", rc, LMJCORE_SUCCESS);
@@ -250,29 +264,76 @@ static void test_object_operations(lmjcore_env *env) {
   lmjcore_txn_commit(txn);
 }
 
-// 测试对象注册
-static void test_object_register(lmjcore_env *env) {
-  printf("\n=== 测试对象注册 ===\n");
+// 测试空实体语义：空值实体不存在，添加成员/元素即创建，0 长度 value 非法
+static void test_empty_entity_semantics(lmjcore_env *env) {
+  printf("\n=== 测试空实体语义 ===\n");
 
   lmjcore_txn *txn = NULL;
-  lmjcore_ptr fixed_ptr = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
-
   int rc = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_DEFAULT, &txn);
   assert(rc == LMJCORE_SUCCESS);
 
-  // 注册固定指针的对象
-  rc = lmjcore_obj_register(txn, fixed_ptr);
-  print_test_result("lmjcore_obj_register", rc, LMJCORE_SUCCESS);
-  print_ptr("注册的对象", fixed_ptr);
+  // 1. 空集合不存在：删除它返回 ENTITY_NOT_FOUND
+  lmjcore_ptr set_ptr;
+  rc = lmjcore_set_create(txn, set_ptr);
+  print_test_result("lmjcore_set_create", rc, LMJCORE_SUCCESS);
 
-  // 检查存在性
-  rc = lmjcore_entity_exist(txn, fixed_ptr);
-  print_test_result("注册后存在性检查", rc, 1);
+  rc = lmjcore_set_del(txn, set_ptr);
+  print_test_result("空集合删除 (应为ENTITY_NOT_FOUND)", rc,
+                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
 
-  // 尝试重复注册
-  rc = lmjcore_obj_register(txn, fixed_ptr);
-  print_test_result("重复注册", rc, LMJCORE_ERROR_ENTITY_EXISTS);
+  // 2. 0 长度 value 是非法值（set 库为重复键数据库）
+  lmjcore_ptr obj_ptr;
+  rc = lmjcore_obj_create(txn, obj_ptr);
+  print_test_result("lmjcore_obj_create", rc, LMJCORE_SUCCESS);
+
+  rc = lmjcore_obj_member_put(txn, obj_ptr, (const uint8_t *)"", 0,
+                              (const uint8_t *)"v", 1);
+  print_test_result("0 长度成员名 (应为INVALID_PARAM)", rc,
+                    LMJCORE_ERROR_INVALID_PARAM);
+
+  rc = lmjcore_set_add(txn, set_ptr, (const uint8_t *)"", 0);
+  print_test_result("0 长度集合元素 (应为INVALID_PARAM)", rc,
+                    LMJCORE_ERROR_INVALID_PARAM);
+
+  rc = lmjcore_set_contains(txn, set_ptr, (const uint8_t *)"", 0);
+  print_test_result("0 长度元素查询 (应为INVALID_PARAM)", rc,
+                    LMJCORE_ERROR_INVALID_PARAM);
+
+  // 3. 向不存在的集合添加元素即创建集合；删除最后一个元素后集合再次消失
+  rc = lmjcore_set_add(txn, set_ptr, (const uint8_t *)"only", 5);
+  print_test_result("lmjcore_set_add (首个元素)", rc, LMJCORE_SUCCESS);
+
+  rc = lmjcore_entity_exist(txn, set_ptr);
+  print_test_result("写入元素后存在性 (应为1)", rc, 1);
+
+  rc = lmjcore_set_remove(txn, set_ptr, (const uint8_t *)"only", 5);
+  print_test_result("lmjcore_set_remove (最后一个元素)", rc, LMJCORE_SUCCESS);
+
+  rc = lmjcore_entity_exist(txn, set_ptr);
+  print_test_result("删除最后一个元素后存在性 (应为0)", rc, 0);
+
+  rc = lmjcore_set_del(txn, set_ptr);
+  print_test_result("空集合再次删除 (应为ENTITY_NOT_FOUND)", rc,
+                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
+
+  // 4. 对象同理：删除最后一个成员后对象消失，再删返回 ENTITY_NOT_FOUND
+  rc = lmjcore_obj_member_put(txn, obj_ptr, (const uint8_t *)"k", 1,
+                              (const uint8_t *)"v", 1);
+  print_test_result("lmjcore_obj_member_put (首个成员)", rc, LMJCORE_SUCCESS);
+
+  rc = lmjcore_entity_exist(txn, obj_ptr);
+  print_test_result("对象写入成员后存在性 (应为1)", rc, 1);
+
+  rc = lmjcore_obj_member_del(txn, obj_ptr, (const uint8_t *)"k", 1);
+  print_test_result("lmjcore_obj_member_del (最后一个成员)", rc,
+                    LMJCORE_SUCCESS);
+
+  rc = lmjcore_entity_exist(txn, obj_ptr);
+  print_test_result("对象成员清空后存在性 (应为0)", rc, 0);
+
+  rc = lmjcore_obj_del(txn, obj_ptr);
+  print_test_result("空对象删除 (应为ENTITY_NOT_FOUND)", rc,
+                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
 
   lmjcore_txn_commit(txn);
 }
@@ -294,6 +355,16 @@ static void test_array_operations(lmjcore_env *env) {
   print_test_result("lmjcore_arr_create", rc, LMJCORE_SUCCESS);
   print_ptr("创建的数组", arr_ptr);
 
+  // 1.1 空集合不存在
+  rc = lmjcore_entity_exist(txn, arr_ptr);
+  print_test_result("空集合存在性检查 (应为0)", rc, 0);
+
+  // 1.2 空集合的统计返回 ENTITY_NOT_FOUND
+  size_t empty_total = 0, empty_elems = 0;
+  rc = lmjcore_set_stat(txn, arr_ptr, &empty_total, &empty_elems);
+  print_test_result("空集合统计 (应为ENTITY_NOT_FOUND)", rc,
+                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
+
   // 2. 追加元素
   const char *elements[] = {"Apple", "Banana", "Cherry", "Date"};
   for (int i = 0; i < 4; i++) {
@@ -303,6 +374,13 @@ static void test_array_operations(lmjcore_env *env) {
   }
   print_test_result("lmjcore_arr_append (4次)", LMJCORE_SUCCESS,
                     LMJCORE_SUCCESS);
+
+  // 2.1 按 value 精确匹配（重复键库必须用 MDB_GET_BOTH，而非 mdb_get）
+  rc = lmjcore_set_contains(txn, arr_ptr, (const uint8_t *)"Cherry", 7);
+  print_test_result("set_contains (存在的元素应为1)", rc, 1);
+
+  rc = lmjcore_set_contains(txn, arr_ptr, (const uint8_t *)"Zzz", 4);
+  print_test_result("set_contains (不存在的元素应为0)", rc, 0);
 
   // 3. 获取数组
   rc = lmjcore_set_get(txn, arr_ptr, buffer, sizeof(buffer), &result);
@@ -502,7 +580,7 @@ int main(void) {
   // 执行各项测试
   test_transaction(env);
   test_object_operations(env);
-  test_object_register(env);
+  test_empty_entity_semantics(env);
   test_array_operations(env);
   test_audit_repair(env);
   test_error_handling(env);

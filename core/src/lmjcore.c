@@ -333,6 +333,11 @@ static int set_stat_values(lmjcore_txn *txn, const lmjcore_ptr ptr,
   MDB_val key = {.mv_data = (void *)ptr, .mv_size = LMJCORE_PTR_LEN};
   MDB_val value;
   rc = mdb_cursor_get(cursor, &key, &value, MDB_SET);
+  if (rc == MDB_NOTFOUND) {
+    // 该指针在 set 库中没有任何 value：空实体即不存在
+    mdb_cursor_close(cursor);
+    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+  }
   if (rc != MDB_SUCCESS) {
     mdb_cursor_close(cursor);
     return rc;
@@ -523,6 +528,17 @@ int lmjcore_txn_abort(lmjcore_txn *txn) {
 
 /**
  * @brief 内部函数：创建实体（对象或集合）
+ *
+ * 只调用指针生成器产生一个新指针并写入实体类型字节，不向 set 库写入任何
+ * 内容。
+ *
+ * 空值实体在语义上不存在：set 库开启了重复键（MDB_DUPSORT），value 长度
+ * 为 0 是非法/不可靠的（只有键不存在时 LMDB 才会勉强接受，且该空值会被
+ * 第一个真实值静默覆盖）。因此实体的存在性完全由 "set 库中该指针键下是否
+ * 存在 >= 1 个 value" 定义：
+ *   - 新建实体在写入第一个成员/元素之前，lmjcore_entity_exist 返回 0；
+ *   - 最后一个成员/元素被删除后，实体随之消失（exist 再次返回 0）。
+ *
  * @param txn 事务句柄
  * @param ptr_out 输出指针
  * @param entity_type 实体类型 (LMJCORE_OBJ 或 LMJCORE_SET)
@@ -546,52 +562,13 @@ static int entity_create(lmjcore_txn *txn, lmjcore_ptr ptr_out,
   // 设置实体类型
   ptr_out[0] = (uint8_t)entity_type;
 
-  // 在 set 数据库中创建空列表（不存储任何值，仅表示实体存在）
-  MDB_val key, data;
-  key.mv_data = ptr_out;
-  key.mv_size = LMJCORE_PTR_LEN;
-  data.mv_data = NULL;
-  data.mv_size = 0;
-
-  rc = mdb_put(txn->mdb_txn, txn->env->set_dbi, &key, &data, 0);
-  if (rc != MDB_SUCCESS) {
-    return rc;
-  }
+  // 不写 set 库：空实体不存在，指针在首次写成员/元素时才真正落库
   return LMJCORE_SUCCESS;
 }
 
 // 创建对象
 int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out) {
   return entity_create(txn, ptr_out, LMJCORE_OBJ);
-}
-
-// 注册对象
-int lmjcore_obj_register(lmjcore_txn *txn, const lmjcore_ptr ptr) {
-  if (!txn || !ptr) {
-    return LMJCORE_ERROR_NULL_POINTER;
-  }
-  if (txn->is_read_only) {
-    return LMJCORE_ERROR_READONLY_TXN;
-  }
-  if (ptr[0] != LMJCORE_OBJ) {
-    return LMJCORE_ERROR_ENTITY_TYPE_MISMATCH;
-  }
-  if (lmjcore_entity_exist(txn, ptr) == 1) {
-    return LMJCORE_ERROR_ENTITY_EXISTS;
-  }
-  // 在 set 数据库中创建空成员列表（不存储任何值，仅表示对象存在）
-  MDB_val key, data;
-  key.mv_data = (void *)ptr;
-  key.mv_size = LMJCORE_PTR_LEN;
-
-  data.mv_data = NULL;
-  data.mv_size = 0;
-
-  int rc = mdb_put(txn->mdb_txn, txn->env->set_dbi, &key, &data, 0);
-  if (rc != MDB_SUCCESS) {
-    return rc;
-  }
-  return LMJCORE_SUCCESS;
 }
 
 // 读取对象
@@ -783,10 +760,9 @@ int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr) {
 
   rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT_DUP);
   if (rc == MDB_NOTFOUND) {
-    // 没有成员，直接删除 set 条目
-    rc = mdb_del(txn->mdb_txn, txn->env->set_dbi, &key, NULL);
+    // set 库中不存在成员注册：空对象即不存在，无可删除的内容
     mdb_cursor_close(cursor);
-    return (rc == MDB_SUCCESS) ? LMJCORE_SUCCESS : rc;
+    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
   }
 
   if (rc == MDB_SUCCESS) {
@@ -834,7 +810,13 @@ int lmjcore_obj_member_put(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   if (member_name_len > LMJCORE_MAX_MEMBER_NAME_LEN) {
     return LMJCORE_ERROR_MEMBER_TOO_LONG;
   }
+  // set 库启用了重复键(MDB_DUPSORT)，长度为 0 的成员名是非法值
+  if (member_name_len == 0) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
 
+  // 不检查对象是否存在：空对象在语义上不存在，向"不存在的对象"写入成员
+  // 等同于向空对象写入第一个成员，对象由此产生。
   // 在 set 数据库中注册成员名（如果尚未注册）
   MDB_val set_key = {.mv_size = LMJCORE_PTR_LEN, .mv_data = (void *)obj_ptr};
   MDB_val set_val = {.mv_size = member_name_len,
@@ -885,6 +867,10 @@ int lmjcore_obj_member_register(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   // 检查成员名长度
   if (member_name_len > LMJCORE_MAX_MEMBER_NAME_LEN) {
     return LMJCORE_ERROR_MEMBER_TOO_LONG;
+  }
+  // set 库启用了重复键(MDB_DUPSORT)，长度为 0 的成员名是非法值
+  if (member_name_len == 0) {
+    return LMJCORE_ERROR_INVALID_PARAM;
   }
 
   MDB_val key = {.mv_data = (void *)obj_ptr, .mv_size = LMJCORE_PTR_LEN};
@@ -1081,7 +1067,13 @@ int lmjcore_set_add(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
   if (set_ptr[0] != LMJCORE_SET) {
     return LMJCORE_ERROR_ENTITY_TYPE_MISMATCH;
   }
+  // set 库启用了重复键(MDB_DUPSORT)，长度为 0 的 value 是非法值
+  if (value_len == 0) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
 
+  // 不检查集合是否存在：空集合在语义上不存在，向"不存在的集合"添加元素
+  // 等同于向空集合添加第一个元素，集合由此产生。
   MDB_val key = {.mv_size = LMJCORE_PTR_LEN, .mv_data = (void *)set_ptr};
   MDB_val mdb_val = {.mv_size = value_len, .mv_data = (void *)value};
 
@@ -1110,6 +1102,10 @@ int lmjcore_set_del(lmjcore_txn *txn, const lmjcore_ptr set_ptr) {
 
   MDB_val key = {.mv_data = (void *)set_ptr, .mv_size = LMJCORE_PTR_LEN};
   int rc = mdb_del(txn->mdb_txn, txn->env->set_dbi, &key, NULL);
+  if (rc == MDB_NOTFOUND) {
+    // 空集合(没有任何元素)在语义上不存在
+    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+  }
   if (rc != MDB_SUCCESS) {
     return rc;
   }
@@ -1127,6 +1123,10 @@ int lmjcore_set_remove(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
   }
   if (set_ptr[0] != LMJCORE_SET) {
     return LMJCORE_ERROR_ENTITY_TYPE_MISMATCH;
+  }
+  // set 库启用了重复键(MDB_DUPSORT)，长度为 0 的 value 是非法值
+  if (element_len == 0) {
+    return LMJCORE_ERROR_INVALID_PARAM;
   }
 
   MDB_val key = {.mv_data = (void *)set_ptr, .mv_size = LMJCORE_PTR_LEN};
@@ -1147,16 +1147,30 @@ int lmjcore_set_contains(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
   if (set_ptr[0] != LMJCORE_SET) {
     return LMJCORE_ERROR_ENTITY_TYPE_MISMATCH;
   }
+  // 0 长度元素不会被写入 set 库，视为非法参数
+  if (element_len == 0) {
+    return LMJCORE_ERROR_INVALID_PARAM;
+  }
+
+  // set 库启用了重复键(MDB_DUPSORT)：mdb_get 只会返回该键下的第一个
+  // value，无法按 value 过滤，必须用游标 MDB_GET_BOTH 做精确匹配
+  MDB_cursor *cursor = NULL;
+  int rc = mdb_cursor_open(txn->mdb_txn, txn->env->set_dbi, &cursor);
+  if (rc != MDB_SUCCESS) {
+    return rc;
+  }
 
   MDB_val key = {.mv_data = (void *)set_ptr, .mv_size = LMJCORE_PTR_LEN};
   MDB_val value = {.mv_data = (void *)element, .mv_size = element_len};
 
-  int rc = mdb_get(txn->mdb_txn, txn->env->set_dbi, &key, &value);
+  rc = mdb_cursor_get(cursor, &key, &value, MDB_GET_BOTH);
+  mdb_cursor_close(cursor);
+
   if (rc == MDB_SUCCESS) {
     return 1; // 存在
   }
   if (rc == MDB_NOTFOUND) {
-    return 0; // 不存在
+    return 0; // 不存在(集合为空或没有该元素)
   }
   return rc; // 错误
 }

@@ -79,18 +79,17 @@ void *stress_test_thread(void *arg) {
     lmjcore_txn *txn = NULL;
     lmjcore_ptr obj_ptr;
 
-    // 开始写事务
-    int ret = lmjcore_txn_begin(env, NULL, 0, &txn);
+    // 分配坐标（无锁、不需要事务）
+    int ret = lmjcore_obj_new(env, obj_ptr);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
       continue;
     }
 
-    // 创建对象
-    ret = lmjcore_obj_create(txn, obj_ptr);
+    // 开始写事务（只负责实化）
+    ret = lmjcore_txn_begin(env, NULL, 0, &txn);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
-      lmjcore_txn_abort(txn);
       continue;
     }
 
@@ -152,29 +151,28 @@ void *stress_test_thread(void *arg) {
   return NULL;
 }
 
-// 数组压力测试
-void *array_stress_test_thread(void *arg) {
+// 集合压力测试
+void *set_stress_test_thread(void *arg) {
   thread_context *ctx = (thread_context *)arg;
   lmjcore_env *env = ctx->env;
 
-  print_with_timestamp("Array Thread %d starting...\n", ctx->thread_id);
+  print_with_timestamp("Set Thread %d starting...\n", ctx->thread_id);
 
   for (int i = 0; i < OPERATIONS_PER_THREAD; i++) {
     lmjcore_txn *txn = NULL;
-    lmjcore_ptr arr_ptr;
+    lmjcore_ptr set_ptr;
 
-    // 开始写事务
-    int ret = lmjcore_txn_begin(env, NULL, 0, &txn);
+    // 分配坐标（无锁、不需要事务）
+    int ret = lmjcore_set_new(env, set_ptr);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
       continue;
     }
 
-    // 创建数组
-    ret = lmjcore_set_create(txn, arr_ptr);
+    // 开始写事务（只负责实化）
+    ret = lmjcore_txn_begin(env, NULL, 0, &txn);
     if (ret != LMJCORE_SUCCESS) {
       ctx->error_count++;
-      lmjcore_txn_abort(txn);
       continue;
     }
 
@@ -186,7 +184,7 @@ void *array_stress_test_thread(void *arg) {
       generate_random_string(value, sizeof(value));
 
       ret =
-          lmjcore_set_add(txn, arr_ptr, (const uint8_t *)value, strlen(value));
+          lmjcore_set_add(txn, set_ptr, (const uint8_t *)value, strlen(value));
       if (ret != LMJCORE_SUCCESS) {
         ctx->error_count++;
         break;
@@ -202,12 +200,12 @@ void *array_stress_test_thread(void *arg) {
 
     // 进度报告
     if (i % 100 == 0) {
-      print_with_timestamp("Array Thread %d: Completed %d/%d operations\n",
+      print_with_timestamp("Set Thread %d: Completed %d/%d operations\n",
                            ctx->thread_id, i, OPERATIONS_PER_THREAD);
     }
   }
 
-  print_with_timestamp("Array Thread %d finished: %d success, %d errors\n",
+  print_with_timestamp("Set Thread %d finished: %d success, %d errors\n",
                        ctx->thread_id, ctx->success_count, ctx->error_count);
 
   return NULL;
@@ -223,63 +221,53 @@ void *mixed_operations_thread(void *arg) {
   lmjcore_ptr persistent_obj;
   int obj_created = 0;
 
-  // 首先创建一个持久化对象
-  lmjcore_txn *init_txn = NULL;
-  if (lmjcore_txn_begin(env, NULL, 0, &init_txn) == LMJCORE_SUCCESS) {
-    if (lmjcore_obj_create(init_txn, persistent_obj) == LMJCORE_SUCCESS) {
-      obj_created = 1;
-      lmjcore_txn_commit(init_txn);
-    } else {
-      lmjcore_txn_abort(init_txn);
-    }
+  // 首先分配一个持久化对象坐标（不需要事务）
+  if (lmjcore_obj_new(env, persistent_obj) == LMJCORE_SUCCESS) {
+    obj_created = 1;
   }
 
   for (int i = 0; i < OPERATIONS_PER_THREAD; i++) {
     int operation_type = rand() % 4;
 
     switch (operation_type) {
-    case 0: { // 对象创建和操作
+    case 0: { // 对象实化和操作
       lmjcore_txn *txn = NULL;
       lmjcore_ptr obj_ptr;
 
-      if (lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
-        if (lmjcore_obj_create(txn, obj_ptr) == LMJCORE_SUCCESS) {
-          char member_name[MAX_MEMBER_NAME_LEN];
-          char value[MAX_VALUE_LEN];
+      if (lmjcore_obj_new(env, obj_ptr) == LMJCORE_SUCCESS &&
+          lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
+        char member_name[MAX_MEMBER_NAME_LEN];
+        char value[MAX_VALUE_LEN];
 
-          generate_random_string(member_name, sizeof(member_name));
-          generate_random_string(value, sizeof(value));
+        generate_random_string(member_name, sizeof(member_name));
+        generate_random_string(value, sizeof(value));
 
-          if (lmjcore_obj_member_put(txn, obj_ptr, (const uint8_t *)member_name,
-                                     strlen(member_name),
-                                     (const uint8_t *)value,
-                                     strlen(value)) == LMJCORE_SUCCESS) {
-            ctx->success_count++;
-          } else {
-            ctx->error_count++;
-          }
+        if (lmjcore_obj_member_put(txn, obj_ptr, (const uint8_t *)member_name,
+                                   strlen(member_name), (const uint8_t *)value,
+                                   strlen(value)) == LMJCORE_SUCCESS) {
+          ctx->success_count++;
+        } else {
+          ctx->error_count++;
         }
         lmjcore_txn_commit(txn);
       }
       break;
     }
 
-    case 1: { // 数组操作
+    case 1: { // 集合实化和操作
       lmjcore_txn *txn = NULL;
-      lmjcore_ptr arr_ptr;
+      lmjcore_ptr set_ptr;
 
-      if (lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
-        if (lmjcore_set_create(txn, arr_ptr) == LMJCORE_SUCCESS) {
-          char value[MAX_VALUE_LEN];
-          int num_elements = (rand() % 5) + 1;
+      if (lmjcore_set_new(env, set_ptr) == LMJCORE_SUCCESS &&
+          lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
+        char value[MAX_VALUE_LEN];
+        int num_elements = (rand() % 5) + 1;
 
-          for (int j = 0; j < num_elements; j++) {
-            generate_random_string(value, sizeof(value));
-            lmjcore_set_add(txn, arr_ptr, (const uint8_t *)value,
-                            strlen(value));
-          }
-          ctx->success_count++;
+        for (int j = 0; j < num_elements; j++) {
+          generate_random_string(value, sizeof(value));
+          lmjcore_set_add(txn, set_ptr, (const uint8_t *)value, strlen(value));
         }
+        ctx->success_count++;
         lmjcore_txn_commit(txn);
       }
       break;
@@ -357,18 +345,14 @@ void memory_leak_test() {
     return;
   }
 
-  // 执行大量操作
+  // 执行大量坐标分配（不碰数据库、无需事务）
   for (int i = 0; i < 10000; i++) {
-    lmjcore_txn *txn = NULL;
     lmjcore_ptr ptr;
 
-    if (lmjcore_txn_begin(env, NULL, 0, &txn) == LMJCORE_SUCCESS) {
-      if (i % 2 == 0) {
-        lmjcore_obj_create(txn, ptr);
-      } else {
-        lmjcore_set_create(txn, ptr);
-      }
-      lmjcore_txn_commit(txn);
+    if (i % 2 == 0) {
+      lmjcore_obj_new(env, ptr);
+    } else {
+      lmjcore_set_new(env, ptr);
     }
 
     if (i % 1000 == 0) {
@@ -435,14 +419,14 @@ int main() {
       total_success, total_errors,
       (float)total_success / (total_success + total_errors) * 100);
 
-  // 测试2: 数组操作压力测试
-  print_with_timestamp("\n=== Test 2: Array Operations Stress Test ===\n");
+  // 测试2: 集合操作压力测试
+  print_with_timestamp("\n=== Test 2: Set Operations Stress Test ===\n");
   for (int i = 0; i < NUM_THREADS; i++) {
     contexts[i].env = env;
     contexts[i].thread_id = i;
     contexts[i].success_count = 0;
     contexts[i].error_count = 0;
-    pthread_create(&threads[i], NULL, array_stress_test_thread, &contexts[i]);
+    pthread_create(&threads[i], NULL, set_stress_test_thread, &contexts[i]);
   }
 
   for (int i = 0; i < NUM_THREADS; i++) {
@@ -457,7 +441,7 @@ int main() {
   }
 
   print_with_timestamp(
-      "Array Test Results: %d successes, %d errors, Success rate: %.2f%%\n",
+      "Set Test Results: %d successes, %d errors, Success rate: %.2f%%\n",
       total_success, total_errors,
       (float)total_success / (total_success + total_errors) * 100);
 

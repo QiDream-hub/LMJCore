@@ -20,15 +20,15 @@ void test_config_basic_operations() {
   ret = lmjcore_txn_begin(env, NULL, 0, &txn);
   assert(ret == LMJCORE_SUCCESS);
 
-  // 测试1: 检查配置对象初始不存在
+  // 测试1: 配置对象初始处于空态
   int exist = lmjcore_config_object_exist(txn);
   assert(exist == 0);
 
-  // 测试2: 准备配置对象（空实体不存在，这里只做事务校验）
+  // 测试2: 准备配置对象（空态是默认态，这里只做事务校验）
   ret = lmjcore_config_object_ensure(txn);
   assert(ret == LMJCORE_SUCCESS);
 
-  // 测试3: 尚未写入任何配置项，配置对象仍不存在
+  // 测试3: 尚未写入任何配置项，配置对象仍处于空态
   exist = lmjcore_config_object_exist(txn);
   assert(exist == 0);
 
@@ -39,7 +39,7 @@ void test_config_basic_operations() {
                            (const uint8_t *)test_value, strlen(test_value));
   assert(ret == LMJCORE_SUCCESS);
 
-  // 测试4.1: 写入第一个配置项后，配置对象才真正存在
+  // 测试4.1: 写入第一个配置项后，配置对象坐标被实化
   exist = lmjcore_config_object_exist(txn);
   assert(exist == 1);
 
@@ -150,7 +150,7 @@ void test_config_error_handling() {
   ret = lmjcore_config_object_ensure(txn);
   assert(ret == LMJCORE_SUCCESS);
 
-  // 测试2.1: 空实体不存在——先写入一个配置项，配置对象才真正存在
+  // 测试2.1: 空态是默认态——先写入一个配置项，配置对象坐标才被实化
   const char *other_key = "another.key";
   ret = lmjcore_config_set(txn, (const uint8_t *)other_key, strlen(other_key),
                            (const uint8_t *)"v", 1);

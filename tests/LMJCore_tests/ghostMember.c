@@ -54,7 +54,7 @@ static int create_ghost_member_direct(MDB_env *mdb_env, MDB_dbi main_dbi,
 struct lmjcore_env_internal {
   MDB_env *mdb_env;
   MDB_dbi main_dbi;
-  MDB_dbi arr_dbi;
+  MDB_dbi set_dbi;
   lmjcore_ptr_generator_fn ptr_generator;
   void *ptr_gen_ctx;
 };
@@ -160,7 +160,15 @@ int main() {
   }
   printf("✅ 环境初始化成功\n");
 
-  // 2. 创建测试对象
+  // 2. 分配测试对象坐标（不需要事务）
+  lmjcore_ptr test_obj;
+  rc = lmjcore_obj_new(env, test_obj);
+  if (rc != LMJCORE_SUCCESS) {
+    fprintf(stderr, "分配对象坐标失败: %d\n", rc);
+    lmjcore_cleanup(env);
+    return 1;
+  }
+
   lmjcore_txn *txn = NULL;
   rc = lmjcore_txn_begin(env, NULL, 0, &txn);
   if (rc != LMJCORE_SUCCESS) {
@@ -169,16 +177,7 @@ int main() {
     return 1;
   }
 
-  lmjcore_ptr test_obj;
-  rc = lmjcore_obj_create(txn, test_obj);
-  if (rc != LMJCORE_SUCCESS) {
-    fprintf(stderr, "创建对象失败: %d\n", rc);
-    lmjcore_txn_abort(txn);
-    lmjcore_cleanup(env);
-    return 1;
-  }
-
-  printf("✅ 创建测试对象: ");
+  printf("✅ 分配测试对象坐标: ");
   print_ptr(test_obj);
   printf("\n");
 

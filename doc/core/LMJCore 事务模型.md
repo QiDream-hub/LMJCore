@@ -26,12 +26,12 @@ flowchart TD
     C -->|读操作| D[只读事务<br>LMJCORE_TXN_READONLY]
     C -->|写操作| E[读写事务<br>flags = 0]
     
-    D --> F[执行读取操作<br>obj_get / set_member_exist / iterate]
+    D --> F[执行读取操作<br>obj_get / set_get / set_contains]
     F --> G{操作完成?}
     G -->|是| H[lmjcore_txn_abort<br>或自动结束]
     G -->|继续读| F
     
-    E --> I[执行写入操作<br>create / put / add / del / register]
+    E --> I[执行写入操作<br>put / add / del / register]
     I --> J{操作成功?}
     J -->|是| K[lmjcore_txn_commit]
     J -->|否| L[lmjcore_txn_abort]
@@ -172,26 +172,35 @@ LMDB 采用**单写者（Single Writer）** 模型：
 
 ## 五、事务中的数据可见性规则
 
-### 5.1 新创建实体的可见性
+### 5.1 坐标分配与实化的可见性
+
+`lmjcore_obj_new()` / `lmjcore_set_new()` **只分配坐标、不写数据库**，因此不需要事务，
+也不存在"事务未提交时坐标不可见"的问题——坐标本身不是数据。
 
 ```c
-// 事务 T1 中创建对象
-lmjcore_obj_create(txn1, obj_ptr);
+// 分配坐标：不涉及事务
+lmjcore_obj_new(env, obj_ptr);
 
-// T1 未提交时，其他事务能否看到该对象？
-lmjcore_entity_exist(txn2, obj_ptr);  // 返回 0（不存在）
+// 事务 T1 中首次写入，使坐标实化
+lmjcore_txn_begin(env, NULL, 0, &txn1);
+lmjcore_obj_member_put(txn1, obj_ptr, "name", 4, (uint8_t *)"Alice", 5);
 
-// T1 提交后
+// T1 未提交时，其他事务看到的是空态
+lmjcore_entity_stat(txn2, obj_ptr);  // 0（空态）
+
+// T1 提交后，新开启的事务 T3 看到已实化
 lmjcore_txn_commit(txn1);
-
-// 新开启的事务 T3 中
-lmjcore_entity_exist(txn3, obj_ptr);  // 返回 1（存在）
+lmjcore_entity_stat(txn3, obj_ptr);  // 1（已实化）
 ```
 
 **规则**：
-- 写事务中创建的实体，在事务提交前**仅对该事务自身可见**
+- `new` 只分配坐标，不产生任何可见数据
+- 写事务中的首次写入（实化）在提交前**仅对该事务自身可见**
 - 提交后，对所有**之后开启**的事务立即可见
-- 已存在的读事务（在提交前开启）仍然看不到新数据
+- 已存在的读事务（在提交前开启）仍然看到空态
+
+> 💡 **实践建议**：把 `new` 放在写事务**之前**调用。分配坐标不需要写锁，这样可以避免
+> 在持有单写者锁期间做与数据库无关的工作，缩短锁持有区间。
 
 ### 5.2 修改的可见性
 
@@ -206,13 +215,13 @@ lmjcore_obj_member_get(txn2, obj_ptr, "count", 5, buf, size, &len);
 // T1 提交后，新事务读取到新值
 ```
 
-**规则**：修改遵循与创建相同的 MVCC 可见性规则
+**规则**：修改遵循与实化相同的 MVCC 可见性规则
 
 ### 5.3 集合元素的可见性
 
 ```c
 // 事务 T1 中向集合添加元素
-lmjcore_set_member_add(txn1, set_ptr, "apple", 5);
+lmjcore_set_add(txn1, set_ptr, "apple", 5);
 
 // T1 未提交时，其他事务遍历集合
 lmjcore_set_iterate(txn2, set_ptr, callback);  
@@ -265,7 +274,7 @@ lmjcore_txn_commit(txn);  // 快速提交
 // ✅ 推荐：批量写入使用单一事务
 lmjcore_txn_begin(env, NULL, 0, &txn);
 for (int i = 0; i < 10000; i++) {
-    lmjcore_set_member_add(txn, set_ptr, elements[i], len[i]);
+    lmjcore_set_add(txn, set_ptr, elements[i], len[i]);
 }
 lmjcore_txn_commit(txn);  // 一次提交，原子性保证
 ```
@@ -278,15 +287,16 @@ lmjcore_txn_commit(txn);  // 一次提交，原子性保证
 ### 6.4 对象与集合的混合操作
 
 ```c
-// ✅ 推荐：对象和集合操作在同一事务中保证一致性
+// ✅ 推荐：坐标分配在事务外，写入在同一事务中保证一致性
+lmjcore_obj_new(env, user_ptr);   // 不碰数据库，无需持有写锁
+
 lmjcore_txn_begin(env, NULL, 0, &txn);
 
-// 创建用户对象
-lmjcore_obj_create(txn, user_ptr);
-lmjcore_obj_member_put(txn, user_ptr, "name", 4, "Alice", 5);
+// 首次写入，实化用户对象
+lmjcore_obj_member_put(txn, user_ptr, "name", 4, (uint8_t *)"Alice", 5);
 
 // 添加到用户集合
-lmjcore_set_member_add(txn, users_set_ptr, user_ptr, LMJCORE_PTR_LEN);
+lmjcore_set_add(txn, users_set_ptr, user_ptr, LMJCORE_PTR_LEN);
 
 lmjcore_txn_commit(txn);  // 原子提交：要么都成功，要么都失败
 ```
@@ -323,7 +333,7 @@ lmjcore_obj_get(txn, ptr, buf, size, &result);  // ❌ 未定义行为，可能�
 lmjcore_txn_begin(env, NULL, 0, &root_txn);
 lmjcore_txn_begin(env, root_txn, 0, &child_txn);
 
-int rc = lmjcore_set_member_add(child_txn, set_ptr, element, len);
+int rc = lmjcore_set_add(child_txn, set_ptr, element, len);
 if (rc != LMJCORE_SUCCESS) {
     // 子事务中出错，回滚子事务
     lmjcore_txn_abort(child_txn);
@@ -394,9 +404,11 @@ lmjcore_txn_commit(root_txn);
 
 ## 十、常见问题解答
 
-### Q1: 只读事务中能否调用 `lmjcore_entity_exist`？
+### Q1: 只读事务中能否调用 `lmjcore_entity_stat`？
 
-✅ 可以。`lmjcore_entity_exist` 是读操作，只读事务中完全合法。
+✅ 可以。它是读操作，只读事务中完全合法，返回 0（空态）/ 1（已实化）。
+
+> 💡 `lmjcore_obj_new` / `lmjcore_set_new` 不读写数据库，根本不需要事务。
 
 ### Q2: 集合元素添加时，如何保证不重复？
 

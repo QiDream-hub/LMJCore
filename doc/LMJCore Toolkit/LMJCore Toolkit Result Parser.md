@@ -206,17 +206,16 @@ for (size_t i = 0; i < count; i++) {
 }
 ```
 
-### 3.2 数组解析（调用者知道这是数组）
+### 3.2 集合解析（调用者知道这是集合）
 
 ```c
 uint8_t result_buf[4096];
-lmjcore_result *result;
+lmjcore_result_set *result;
 
-// 获取数组数据 - 调用者知道这是数组
-int ret = lmjcore_arr_get(txn, arr_ptr, LMJCORE_MODE_LOOSE,
-                         result_buf, sizeof(result_buf), &result);
+// 获取集合数据 - 调用者知道这是集合
+int ret = lmjcore_set_get(txn, set_ptr, result_buf, sizeof(result_buf), &result);
 
-// 遍历数组元素
+// 遍历集合元素
 size_t count = lmjcore_parser_arr_element_count(result);
 for (size_t i = 0; i < count; i++) {
     const uint8_t *element_data;

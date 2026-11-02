@@ -92,19 +92,19 @@ if (rc != LMJCORE_SUCCESS) {
 }
 ```
 
-### 2. 创建对象并写入数据
+### 2. 分配对象坐标并写入数据
 
 ```c
 lmjcore_txn *txn;
 lmjcore_ptr obj_ptr;
 
+// 分配坐标：不碰数据库，无需事务
+lmjcore_obj_new(env, obj_ptr);
+
 // 开启写事务
 lmjcore_txn_begin(env, NULL, 0, &txn);
 
-// 创建对象
-lmjcore_obj_create(txn, obj_ptr);
-
-// 写入成员
+// 写入成员（首次写入使坐标实化）
 lmjcore_obj_member_put(txn, obj_ptr, 
                        (uint8_t*)"name", 4,
                        (uint8_t*)"Alice", 5);
@@ -117,17 +117,17 @@ lmjcore_obj_member_put(txn, obj_ptr,
 lmjcore_txn_commit(txn);
 ```
 
-### 3. 创建集合并添加元素
+### 3. 分配集合坐标并添加元素
 
 ```c
 lmjcore_ptr set_ptr;
 
+// 分配坐标：不碰数据库，无需事务
+lmjcore_set_new(env, set_ptr);
+
 lmjcore_txn_begin(env, NULL, 0, &txn);
 
-// 创建集合
-lmjcore_set_create(txn, set_ptr);
-
-// 添加元素（自动去重、按字典序排序）
+// 添加元素（首次写入使坐标实化；自动去重、按字典序排序）
 lmjcore_set_add(txn, set_ptr, (uint8_t*)"apple", 5);
 lmjcore_set_add(txn, set_ptr, (uint8_t*)"banana", 6);
 lmjcore_set_add(txn, set_ptr, (uint8_t*)"apple", 5); // 重复添加，返回错误
@@ -188,12 +188,12 @@ if (report->audit_count > 0) {
 
 | 概念 | 说明 |
 |------|------|
-| **指针** | 17 字节全局唯一 ID，首字节标识类型（对象/集合） |
+| **指针** | 17 字节全局唯一 ID，首字节标识类型（对象/集合）；**实体空间预先存在，指针是坐标** |
 | **`set` 数据库** | 存储实体的关联项集合（成员名列表、集合元素列表），支持多值、自动去重、按字典序排序 |
 | **`main` 数据库** | 存储具体值，Key = `[指针][成员名]`，点查 O(1) |
 | **缺失值** | `set` 中有成员名但 `main` 中无值 → 合法中间状态 |
 | **幽灵成员** | `main` 中有值但 `set` 中未注册 → 数据损坏 |
-| **空实体** | 不存在：`create` 只生成指针，实体在首次写入成员/元素时才产生 |
+| **已实化 / 空态** | `set` 中有 Key = 已实化（`entity_stat` 返回 1）；无 Key = 空态（默认态，返回 0） |
 
 ### 集合 vs 对象
 
@@ -202,14 +202,14 @@ if (report->audit_count > 0) {
 | **指针标识** | `0x01` | `0x02` |
 | **结构** | 键值对（成员名 → 值） | 元素列表（无序） |
 | **存储位置** | 成员名在 `set`，值在 `main` | 元素在 `set` |
-| **访问方式** | 通过成员名点查 | 遍历或判断存在性 |
+| **访问方式** | 通过成员名点查 | 遍历或判断是否已实化 |
 | **典型场景** | 配置、用户信息、文档 | 标签、权限组、唯一值列表 |
 
 > ⚠️ **重要**：集合**不保留插入顺序**，按字典序自动排序。若需有序列表，请在 Value 中编码下标（如前 4 字节）。
 >
-> ⚠️ **空实体不存在**：`lmjcore_obj_create()` / `lmjcore_set_create()` 只生成指针，不写存储；
-> 实体在首次写入成员/元素时才产生（写入侧不做存在性检查），最后一个成员/元素被删除后实体
-> 随之消失，`lmjcore_entity_exist()` 返回 0。成员名/集合元素**不允许为空**。
+> ⚠️ **空态是默认态，不是"不存在"**：`lmjcore_obj_new()` / `lmjcore_set_new()` 只分配坐标、
+> 不写存储；首次写入成员/元素时才**实化**（写入侧不做状态检查），删除最后一个成员/元素后
+> 坐标回到空态。`lmjcore_entity_stat()` 返回 0（空态）/ 1（已实化）。成员名/集合元素**不允许为空**。
 
 想深入了解？请阅读：
 - [LMJCore 核心存储模型](docs/LMJCore%20核心存储模型.md)
@@ -240,7 +240,7 @@ bool lmjcore_txn_is_read_only(lmjcore_txn *txn);
 
 ### 对象操作
 ```c
-int lmjcore_obj_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
+int lmjcore_obj_new(lmjcore_env *env, lmjcore_ptr ptr_out);
 int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                     uint8_t *result_buf, size_t result_buf_size,
                     lmjcore_result_obj **result_head);
@@ -265,7 +265,7 @@ int lmjcore_obj_member_list(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
 
 ### 集合操作
 ```c
-int lmjcore_set_create(lmjcore_txn *txn, lmjcore_ptr ptr_out);
+int lmjcore_set_new(lmjcore_env *env, lmjcore_ptr ptr_out);
 int lmjcore_set_add(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
                     const uint8_t *value, size_t value_len);
 int lmjcore_set_get(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
@@ -291,7 +291,7 @@ int lmjcore_repair_object(lmjcore_txn *txn, uint8_t *report_buf,
 ```c
 int lmjcore_ptr_to_string(const lmjcore_ptr ptr, char *str_buf, size_t buf_size);
 int lmjcore_ptr_from_string(const char *str, lmjcore_ptr ptr_out);
-int lmjcore_entity_exist(lmjcore_txn *txn, const lmjcore_ptr ptr);
+int lmjcore_entity_stat(lmjcore_txn *txn, const lmjcore_ptr ptr);
 const char *lmjcore_strerror(int error_code);
 ```
 

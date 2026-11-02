@@ -18,7 +18,7 @@ LMJCore 是一个基于 **LMDB** 构建的高性能、嵌入式、无模式（Sc
 - **真正的无类型存储**：所有值均为二进制安全字节数组，支持任意编码（JSON、Protobuf、自定义等）。
 - **存索分离设计**：
   - `main` 数据库存储具体值（命名格子区）
-  - `arr` 数据库存储成员/元素列表（集合袋区）
+  - `set` 数据库存储成员/元素列表（集合袋区）
 - **可插拔指针生成**：支持 UUID、ULID、雪花算法、自增 ID 等策略（需保证唯一性）。
 
 ### 🛡️ 数据安全
@@ -27,8 +27,8 @@ LMJCore 是一个基于 **LMDB** 构建的高性能、嵌入式、无模式（Sc
 - **幽灵成员检测**：内置审计与修复机制，主动发现并清理数据损坏。
 
 ### 📚 简洁原语
-- **二元归一模型**：仅用 **对象（Object）** 和 **数组（Array）** 两种结构建模任意复杂数据。
-- **统一指针系统**：17 字节全局唯一指针（含 1B 类型前缀 + 16B 唯一 ID）作为数据访问的唯一凭证。
+- **二元归一模型**：仅用 **对象（Object）** 和 **集合（Set）** 两种结构建模任意复杂数据。
+- **统一指针系统**：17 字节全局唯一指针（含 1B 类型前缀 + 16B 唯一 ID）；**实体空间预先存在，指针是坐标**。
 
 ---
 
@@ -40,16 +40,16 @@ LMJCore 是一个基于 **LMDB** 构建的高性能、嵌入式、无模式（Sc
     │
     └── LMJCore 存储内核
         ├── main 数据库 (存储单一映射)
-        └── arr 数据库 (存储列表映射)
+        └── set 数据库 (存储列表映射)
             │
             └── LMDB (存储引擎)
 ```
 
 
 > ✨ **心智模型**：
-> - `arr` 是“集合袋”：给定指针，列出它“拥有什么”（无序集合）。
+> - `set` 是“集合袋”：给定坐标，列出它“拥有什么”（无序集合）。
 > - `main` 是“命名格子”：给定“谁的 + 叫什么”，直接拿到值（O(1) 点查）。
-> - **指针是胶水**：将分散片段重新组合成完整逻辑实体。
+> - **指针是坐标**：它定位预先存在的实体空间；写入使坐标实化，删除最后一项使其回到空态。
 
 ---
 
@@ -78,16 +78,17 @@ brew install lmdb
 
 // 初始化环境（必须提供指针生成器）
 lmjcore_env* env;
-lmjcore_init("/data/lmjcore", 1024 * 1024 * 1024, 0, NULL, NULL, &env);
+lmjcore_init("/data/lmjcore", 1024 * 1024 * 1024, 0, my_ptr_generator, NULL, &env);
+
+// 分配对象坐标（不碰数据库，无需事务）
+lmjcore_ptr obj_ptr;
+lmjcore_obj_new(env, obj_ptr);
 
 // 创建写事务
 lmjcore_txn* txn;
-lmjcore_txn_begin(env, LMJCORE_TXN_WRITE, &txn);
+lmjcore_txn_begin(env, NULL, 0, &txn);
 
-// 创建对象并写入数据
-lmjcore_ptr obj_ptr;
-lmjcore_obj_create(txn, obj_ptr);
-
+// 写入成员（首次写入使坐标实化）
 const char* name = "张三";
 int age = 25;
 lmjcore_obj_member_put(txn, obj_ptr, (uint8_t*)"name", 4, (uint8_t*)name, strlen(name));
@@ -97,7 +98,7 @@ lmjcore_obj_member_put(txn, obj_ptr, (uint8_t*)"age", 3, (uint8_t*)&age, sizeof(
 lmjcore_txn_commit(txn);
 
 // 读取数据（结果自包含完整性信息）
-lmjcore_txn_begin(env, LMJCORE_TXN_READONLY, &txn);
+lmjcore_txn_begin(env, NULL, LMJCORE_TXN_READONLY, &txn);
 uint8_t result_buf[8192];
 lmjcore_result_obj* result;
 int rc = lmjcore_obj_get(txn, obj_ptr, result_buf, sizeof(result_buf), &result);
@@ -131,8 +132,9 @@ lmjcore_cleanup(env);
 
 - 固定 17 字节：`[类型:1B][唯一ID:16B]`
     - `0x01` → 对象（Object）
-    - `0x02` → 数组（Array）
+    - `0x02` → 集合（Set）
 - 全局唯一，由上层生成器保证（内核不校验唯一性）。
+- **实体空间预先存在，指针是坐标**：`set` 中有 Key = 已实化，无 Key = 空态（默认）。
 
 ### 数据可用性由返回体自描述
 
@@ -140,7 +142,7 @@ LMJCore **不提供“宽松/严格”读取模式开关**。
 所有读取操作返回的结构体（如 `lmjcore_result_obj`）同时包含：
 
 - `members[]`：成功读取的成员描述符
-- `errors[]`：缺失值、实体不存在等错误详情（最多记录 8 项）
+- `errors[]`：缺失值、实体处于空态等错误详情（最多记录 8 项）
 
 上层应用应检查 `error_count` 来判断数据是否完整可用：
 
@@ -159,8 +161,8 @@ LMJCore **不提供“宽松/严格”读取模式开关**。
 存储时：
 
 - `main[parent_ptr + "user"]` → `child_obj_ptr`（17B 指针）
-- `main[parent_ptr + "tags"]` → `tags_arr_ptr`（17B 指针）
-- 子对象/数组各自在 `arr`/`main` 中独立定义
+- `main[parent_ptr + "tags"]` → `tags_set_ptr`（17B 指针）
+- 子对象/集合各自在 `set`/`main` 中独立定义
 
 ---
 
@@ -176,18 +178,19 @@ LMJCore **不提供“宽松/严格”读取模式开关**。
 
 ### 对象操作
 
-- `lmjcore_obj_create()` / `lmjcore_obj_get()` / `lmjcore_obj_del()`
+- `lmjcore_obj_new()` / `lmjcore_obj_get()` / `lmjcore_obj_del()`
 - `lmjcore_obj_member_put()` / `lmjcore_obj_member_get()`
 - `lmjcore_obj_member_register()`（分步初始化）
 
-### 数组操作
+### 集合操作
 
-- `lmjcore_arr_create()` / `lmjcore_arr_append()` / `lmjcore_arr_get()`
+- `lmjcore_set_new()` / `lmjcore_set_add()` / `lmjcore_set_get()`
+- `lmjcore_set_remove()` / `lmjcore_set_del()` / `lmjcore_set_contains()`
 
 ### 工具函数
 
 - `lmjcore_ptr_to_string()` / `lmjcore_ptr_from_string()`
-- `lmjcore_entity_exist()` / `lmjcore_obj_member_value_exist()`
+- `lmjcore_entity_stat()` / `lmjcore_obj_member_value_exist()`
 - `lmjcore_audit_object()` / `lmjcore_repair_object()`（数据完整性保障）
 
 ---
@@ -196,9 +199,9 @@ LMJCore **不提供“宽松/严格”读取模式开关**。
 
 |操作|复杂度|说明|
 |---|---|---|
-|对象获取|O(log n) + k·O(1)|`arr` 查成员列表 + `main` 并发点查|
+|对象获取|O(log n) + k·O(1)|`set` 查成员列表 + `main` 并发点查|
 |成员更新|O(1)|仅修改 `main` 中一个格子|
-|数组追加|O(log n)|LMDB 插入复杂度|
+|集合添加|O(log n)|LMDB 插入复杂度|
 
 > ✅ 所有写操作在单事务内原子完成，避免中间状态暴露。
 

@@ -109,30 +109,34 @@ LMJCore 使用两个 LMDB 数据库协同工作：
 
 ---
 
-## 四、数据存在性与完整性规则
+## 四、数据状态与完整性规则
 
-### 4.1 实体存在性判定
+### 4.1 实体状态判定
+
+**实体空间预先存在，指针是坐标；`set` 有 Key = 已实化，无 Key = 空态。**
 
 |状态|判定条件|
 |---|---|
-|**有效实体**|指针在 `set` 中存在至少一个条目（≥ 1 个 value）|
-|**空实体 / 不存在**|`set` 中无对应 Key（刚创建尚未写入成员/元素，或成员/元素已被全部删除）|
+|**已实化**|指针在 `set` 中存在至少一个条目（≥ 1 个 value），`entity_stat` 返回 1|
+|**空态（默认态）**|`set` 中无对应 Key（坐标刚分配尚未写入，或成员/元素已被全部删除），`entity_stat` 返回 0|
 
 > ⚠️ `set` 启用了重复键（`MDB_DUPSORT`），**不允许 0 长度 value**：键已存在时写入 0 长度
 > value 会返回 `MDB_BAD_VALSIZE`；只有键不存在时才被 LMDB 勉强接受，且会被第一个真实
-> value 静默覆盖。因此内核**不使用"空标记"表示实体存在**——空实体在语义上不存在。
+> value 静默覆盖。因此内核**不使用"空标记"**——`set` 中有 Key 即已实化，无 Key 即空态。
+> **空态是合法的默认状态，不是"实体不存在"。**
 >
-> ✅ `lmjcore_obj_create()` / `lmjcore_set_create()` **只生成指针、不写存储**；实体在首次
-> 写入成员/元素时才真正产生。写入侧（`lmjcore_set_add()` / `lmjcore_obj_member_put()` /
-> `lmjcore_obj_member_register()`）**不做存在性检查**：向不存在的实体写入即等同于向空实体
-> 写入第一个成员/元素。
+> ✅ `lmjcore_obj_new()` / `lmjcore_set_new()` **只分配坐标、不写存储**（因此不需要事务）；
+> 坐标在首次写入成员/元素时**实化**。写入侧（`lmjcore_set_add()` /
+> `lmjcore_obj_member_put()` / `lmjcore_obj_member_register()`）**不做状态检查**：向空态坐标
+> 写入即完成首次实化。
 >
-> ✅ 由此也不存在"注册空实体"的操作（`lmjcore_obj_register()` 已移除）。
+> ✅ 状态判定：`lmjcore_entity_stat()` 返回 0（空态）或 1（已实化），任何合法坐标都有确定答案。
 >
-> ⚠️ 空实体上的操作：`lmjcore_entity_exist()` 返回 0；`lmjcore_obj_get()` /
-> `lmjcore_set_get()` 仍在结果中记录 `LMJCORE_ERROR_ENTITY_NOT_FOUND` 错误位；
-> `lmjcore_set_stat()` / `lmjcore_obj_stat_members()` / `lmjcore_obj_del()` /
-> `lmjcore_set_del()` 返回 `LMJCORE_ERROR_ENTITY_NOT_FOUND`。
+> ⚠️ 空态上的内容操作：`lmjcore_obj_get()` / `lmjcore_set_get()` 在结果中记录
+> `LMJCORE_ERROR_ENTITY_NOT_FOUND` 错误位；`lmjcore_set_stat()` /
+> `lmjcore_obj_stat_members()` / `lmjcore_obj_del()` / `lmjcore_set_del()` 返回
+> `LMJCORE_ERROR_ENTITY_NOT_FOUND`。该错误码的含义是**当前没有可操作内容**，
+> 而非坐标非法。
 
 > ✅ 此规则为系统基础语义，上层可在此基础上构建缓存或懒加载策略。
 
@@ -249,14 +253,16 @@ memcpy(&ptr[2], uuid, 15);
 
 ### 6.1 核心 API 命名模式
 
-|操作对象|创建|读取|更新|删除|存在性检查|
+|操作对象|分配坐标|读取|更新|删除|状态检查|
 |---|---|---|---|---|---|
-|**对象**|`lmjcore_obj_create`|`lmjcore_obj_member_get`|`lmjcore_obj_member_put`|`lmjcore_obj_member_del`|`lmjcore_obj_member_exist`|
-|**集合**|`lmjcore_set_create`|`lmjcore_set_member_get`|`lmjcore_set_member_add`|`lmjcore_set_member_del`|`lmjcore_set_member_exist`|
+|**对象**|`lmjcore_obj_new`|`lmjcore_obj_member_get` / `lmjcore_obj_get`|`lmjcore_obj_member_put` / `lmjcore_obj_member_register`|`lmjcore_obj_member_value_del` / `lmjcore_obj_member_del` / `lmjcore_obj_del`|`lmjcore_obj_member_value_exist` / `lmjcore_entity_stat`|
+|**集合**|`lmjcore_set_new`|`lmjcore_set_get`|`lmjcore_set_add`|`lmjcore_set_remove` / `lmjcore_set_del`|`lmjcore_set_contains` / `lmjcore_entity_stat`|
 
-> 📝 **命名说明**：  
-> - 集合的“添加”操作用 `add` 而非 `put`，强调其集合语义（无序、自动去重）
-> - 对象的“更新”操作用 `put`，强调键值对语义
+> 📝 **命名说明**：
+> - `new` 表示**分配坐标**，不触碰数据库，因此接收 `env` 而非 `txn`；
+> - 集合的“添加”操作用 `add` 而非 `put`，强调其集合语义（无序、自动去重）；
+> - 对象的“更新”操作用 `put`，强调键值对语义；
+> - `lmjcore_entity_stat` 返回 0（空态）/ 1（已实化），适用于任意实体。
 
 ---
 
@@ -283,12 +289,15 @@ memcpy(&ptr[2], uuid, 15);
 1. **类型迁移**：`LMJCORE_ARR` → `LMJCORE_SET`
 2. **数据库迁移**：`"arr"` → `"set"`
 3. **API 迁移**：
-   - `lmjcore_arr_create` → `lmjcore_set_create`
-   - `lmjcore_arr_append` → `lmjcore_set_member_add`
-   - `lmjcore_arr_remove` → `lmjcore_set_member_del`
-   - `lmjcore_arr_iterate` → `lmjcore_set_iterate`
+   - `lmjcore_arr_create` → `lmjcore_set_new`
+   - `lmjcore_arr_append` → `lmjcore_set_add`
+   - `lmjcore_arr_remove` → `lmjcore_set_remove`
+   - `lmjcore_arr_iterate` → `lmjcore_set_get`
 
 > 💡 内核版本 2.0 起采用新命名，旧 API 将在后续版本中移除。
+>
+> 💡 若代码仍在调用 `lmjcore_obj_create` / `lmjcore_set_create`：它们已更名为
+> `lmjcore_obj_new` / `lmjcore_set_new`，且不再接收事务参数（改为 `lmjcore_env *`）。
 
 ---
 

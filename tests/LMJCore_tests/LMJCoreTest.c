@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-// 示例：创建对象并写入数据
+// 示例：分配坐标并写入数据
 
 int main() {
   lmjcore_env *env = NULL;
@@ -18,6 +18,15 @@ int main() {
     return 1;
   }
 
+  lmjcore_ptr set_ptr;
+  // 分配集合坐标（不需要事务）
+  rc = lmjcore_set_new(env, set_ptr);
+  if (rc != LMJCORE_SUCCESS) {
+    printf("集合坐标分配失败");
+    lmjcore_cleanup(env);
+    return 1;
+  }
+
   // 开始写事务
   rc = lmjcore_txn_begin(env, NULL, 0, &txn);
   if (rc != LMJCORE_SUCCESS) {
@@ -25,28 +34,19 @@ int main() {
     lmjcore_cleanup(env);
     return 1;
   }
-
-  lmjcore_ptr arr_ptr;
-  // 创建数组
-  rc = lmjcore_set_create(txn, arr_ptr);
-  if (rc != LMJCORE_SUCCESS) {
-    printf("数组创建失败");
-    lmjcore_txn_abort(txn);
-    lmjcore_cleanup(env);
-  }
-  rc = lmjcore_set_add(txn, arr_ptr, (uint8_t *)"const uint8_t *value",
+  rc = lmjcore_set_add(txn, set_ptr, (uint8_t *)"const uint8_t *value",
                        sizeof("const uint8_t *value"));
   if (rc != LMJCORE_SUCCESS) {
-    printf("数组提交元素失败");
+    printf("集合提交元素失败");
     lmjcore_txn_abort(txn);
     lmjcore_cleanup(env);
   }
 
-  // 创建对象
+  // 分配对象坐标（不需要事务）
   lmjcore_ptr obj_ptr;
-  rc = lmjcore_obj_create(txn, obj_ptr);
+  rc = lmjcore_obj_new(env, obj_ptr);
   if (rc != LMJCORE_SUCCESS) {
-    printf("对象创建失败: %d\n", rc);
+    printf("对象坐标分配失败: %d\n", rc);
     lmjcore_txn_abort(txn);
     lmjcore_cleanup(env);
     return 1;
@@ -55,7 +55,7 @@ int main() {
   // 转换为可读字符串
   char ptr_str[35];
   lmjcore_ptr_to_string(obj_ptr, ptr_str, sizeof(ptr_str));
-  printf("创建对象: %s\n", ptr_str);
+  printf("分配对象坐标: %s\n", ptr_str);
 
   // 写入成员数据
   const char *name = "John Doe";

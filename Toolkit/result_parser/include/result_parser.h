@@ -21,7 +21,7 @@ extern "C" {
  * @param value_len 输出参数，值数据长度
  * @return int
  *   - LMJCORE_SUCCESS: 找到成员
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 成员不存在
+ *   - LMJCORE_ERROR_MEMBER_NOT_FOUND: 成员不存在
  *   - LMJCORE_ERROR_INVALID_PARAM: 参数无效
  */
 int lmjcore_parser_obj_find_member(const lmjcore_result_obj *result,
@@ -43,7 +43,7 @@ int lmjcore_parser_obj_find_member(const lmjcore_result_obj *result,
  * @param value_len 输出参数，值数据长度
  * @return int
  *   - LMJCORE_SUCCESS: 获取成功
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 索引越界
+ *   - LMJCORE_ERROR_INVALID_PARAM: 索引越界
  */
 int lmjcore_parser_obj_get_member(const lmjcore_result_obj *result,
                                   const uint8_t *result_buf, size_t index,
@@ -71,7 +71,7 @@ size_t lmjcore_parser_obj_member_count(const lmjcore_result_obj *result);
  * @param element_len 输出参数，元素数据长度
  * @return int
  *   - LMJCORE_SUCCESS: 获取成功
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 索引越界
+ *   - LMJCORE_ERROR_INVALID_PARAM: 索引越界
  */
 int lmjcore_parser_arr_get_element(const lmjcore_result_set *result,
                                    const uint8_t *result_buf, size_t index,
@@ -88,7 +88,7 @@ int lmjcore_parser_arr_get_element(const lmjcore_result_set *result,
  * @param found_index 输出参数，找到的索引位置
  * @return int
  *   - LMJCORE_SUCCESS: 找到元素
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 元素不存在
+ *   - LMJCORE_ERROR_ELEMENT_NOT_FOUND: 元素不存在
  */
 int lmjcore_parser_arr_find_element(const lmjcore_result_set *result,
                                     const uint8_t *result_buf,
@@ -121,7 +121,7 @@ size_t lmjcore_parser_error_count(const void *result);
  * @param error 输出参数，错误信息指针
  * @return int
  *   - LMJCORE_SUCCESS: 获取成功
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 索引越界
+ *   - LMJCORE_ERROR_INVALID_PARAM: 索引越界
  */
 int lmjcore_parser_get_error(const void *result, size_t index,
                              const lmjcore_read_error **error);

@@ -133,9 +133,9 @@ LMJCore 使用两个 LMDB 数据库协同工作：
 > ✅ 状态判定：`lmjcore_entity_stat()` 返回 0（空态）或 1（已实化），任何合法坐标都有确定答案。
 >
 > ⚠️ 空态上的内容操作：`lmjcore_obj_get()` / `lmjcore_set_get()` 在结果中记录
-> `LMJCORE_ERROR_ENTITY_NOT_FOUND` 错误位；`lmjcore_set_stat()` /
+> `LMJCORE_ERROR_ENTITY_EMPTY` 错误位；`lmjcore_set_stat()` /
 > `lmjcore_obj_stat_members()` / `lmjcore_obj_del()` / `lmjcore_set_del()` 返回
-> `LMJCORE_ERROR_ENTITY_NOT_FOUND`。该错误码的含义是**当前没有可操作内容**，
+> `LMJCORE_ERROR_ENTITY_EMPTY`。该错误码的含义是**当前没有可操作内容**，
 > 而非坐标非法。
 
 > ✅ 此规则为系统基础语义，上层可在此基础上构建缓存或懒加载策略。

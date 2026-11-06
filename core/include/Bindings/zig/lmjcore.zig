@@ -33,14 +33,15 @@ pub const Error = error{
     ReadonlyParent, // -32021: 父事务是只读，不能开子事务
 
     // 实体相关 (-32040 ~ -32059)
-    EntityNotFound, // -32040: 实体不存在
+    EntityEmpty, // -32040: 实体处于空态（未实化，无可操作内容）
     EntityExists, // -32041: 实体已存在
     EntityTypeMismatch, // -32042: 实体类型不匹配
 
-    // 成员相关 (-32060 ~ -32079)
+    // 成员/元素相关 (-32060 ~ -32079)
     MemberNotFound, // -32060: 成员不存在
     MemberExists, // -32061: 成员已存在
     MemberMissing, // -32062: 成员缺失值
+    ElementNotFound, // -32063: 集合元素不存在
 
     // 资源相关 (-32080 ~ -32099)
     MemoryAllocationFailed, // -32080: 内存分配失败
@@ -96,12 +97,13 @@ fn mapLmjcoreError(rc: c_int) ?Error {
         c.LMJCORE_ERROR_BUFFER_TOO_SMALL => Error.BufferTooSmall,
         c.LMJCORE_ERROR_READONLY_TXN => Error.ReadonlyTxn,
         c.LMJCORE_ERROR_READONLY_PARENT => Error.ReadonlyParent,
-        c.LMJCORE_ERROR_ENTITY_NOT_FOUND => Error.EntityNotFound,
+        c.LMJCORE_ERROR_ENTITY_EMPTY => Error.EntityEmpty,
         c.LMJCORE_ERROR_ENTITY_EXISTS => Error.EntityExists,
         c.LMJCORE_ERROR_ENTITY_TYPE_MISMATCH => Error.EntityTypeMismatch,
         c.LMJCORE_ERROR_MEMBER_NOT_FOUND => Error.MemberNotFound,
         c.LMJCORE_ERROR_MEMBER_EXISTS => Error.MemberExists,
         c.LMJCORE_ERROR_MEMBER_MISSING => Error.MemberMissing,
+        c.LMJCORE_ERROR_ELEMENT_NOT_FOUND => Error.ElementNotFound,
         c.LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED => Error.MemoryAllocationFailed,
         c.LMJCORE_ERROR_GHOST_MEMBER => Error.GhostMember,
         else => null,

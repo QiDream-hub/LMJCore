@@ -67,7 +67,7 @@ int lmjcore_config_get(lmjcore_txn *txn, const uint8_t *key, size_t key_len,
     return exist;
   }
   if (exist == 0) {
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_ENTITY_EMPTY;
   }
 
   // 获取配置项
@@ -88,7 +88,7 @@ int lmjcore_config_get_all(lmjcore_txn *txn, uint8_t *result_buf,
     return exist;
   }
   if (exist == 0) {
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_ENTITY_EMPTY;
   }
 
   // 获取完整配置对象

@@ -26,7 +26,7 @@ int lmjcore_parser_obj_find_member(const lmjcore_result_obj *result,
     }
   }
 
-  return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+  return LMJCORE_ERROR_MEMBER_NOT_FOUND;
 }
 
 int lmjcore_parser_obj_get_member(const lmjcore_result_obj *result,
@@ -35,7 +35,7 @@ int lmjcore_parser_obj_get_member(const lmjcore_result_obj *result,
                                   const uint8_t **value_data,
                                   size_t *value_len) {
   if (!result || !result_buf || index >= result->member_count) {
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_INVALID_PARAM;
   }
 
   const lmjcore_member_descriptor *desc = &result->members[index];
@@ -62,7 +62,7 @@ int lmjcore_parser_arr_get_element(const lmjcore_result_set *result,
                                    const uint8_t **element_data,
                                    size_t *element_len) {
   if (!result || !result_buf || index >= result->element_count) {
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_INVALID_PARAM;
   }
 
   const lmjcore_descriptor *desc = &result->elements[index];
@@ -92,7 +92,7 @@ int lmjcore_parser_arr_find_element(const lmjcore_result_set *result,
     }
   }
 
-  return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+  return LMJCORE_ERROR_ELEMENT_NOT_FOUND;
 }
 
 size_t lmjcore_parser_arr_element_count(const lmjcore_result_set *result) {
@@ -114,12 +114,12 @@ size_t lmjcore_parser_error_count(const void *result) {
 int lmjcore_parser_get_error(const void *result, size_t index,
                              const lmjcore_read_error **error) {
   if (!result || !error || index >= LMJCORE_MAX_READ_ERRORS) {
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_INVALID_PARAM;
   }
 
   const lmjcore_result_obj *obj = (const lmjcore_result_obj *)result;
   if (index >= obj->error_count) {
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_INVALID_PARAM;
   }
 
   *error = &obj->errors[index];

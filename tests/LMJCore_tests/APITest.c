@@ -140,11 +140,11 @@ static void test_object_operations(lmjcore_env *env) {
   rc = lmjcore_entity_stat(txn, obj_ptr);
   print_test_result("lmjcore_entity_stat (空态)", rc, 0);
 
-  // 2.1 空态的统计返回 ENTITY_NOT_FOUND（没有可统计的内容）
+  // 2.1 空态的统计返回 ENTITY_EMPTY（没有可统计的内容）
   size_t empty_len = 0, empty_count = 0;
   rc = lmjcore_obj_stat_members(txn, obj_ptr, &empty_len, &empty_count);
   print_test_result("lmjcore_obj_stat_members (空态)", rc,
-                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
+                    LMJCORE_ERROR_ENTITY_EMPTY);
 
   // 3. 注册对象成员（仅注册名称）——向空态坐标写入即完成实化
   const char *member1 = "name";
@@ -284,13 +284,13 @@ static void test_empty_entity_semantics(lmjcore_env *env) {
   rc = lmjcore_txn_begin(env, NULL, LMJCORE_TXN_DEFAULT, &txn);
   assert(rc == LMJCORE_SUCCESS);
 
-  // 1. 空态是默认态：没有元素可删，返回 ENTITY_NOT_FOUND
+  // 1. 空态是默认态：没有元素可删，返回 ENTITY_EMPTY
   rc = lmjcore_entity_stat(txn, set_ptr);
   print_test_result("集合初始状态 (应为0)", rc, 0);
 
   rc = lmjcore_set_del(txn, set_ptr);
-  print_test_result("空态集合删除 (应为ENTITY_NOT_FOUND)", rc,
-                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
+  print_test_result("空态集合删除 (应为ENTITY_EMPTY)", rc,
+                    LMJCORE_ERROR_ENTITY_EMPTY);
 
   // 2. 0 长度 value 是非法值（set 库为重复键数据库）
   rc = lmjcore_entity_stat(txn, obj_ptr);
@@ -325,10 +325,10 @@ static void test_empty_entity_semantics(lmjcore_env *env) {
                     0);
 
   rc = lmjcore_set_del(txn, set_ptr);
-  print_test_result("空态集合再次删除 (应为ENTITY_NOT_FOUND)", rc,
-                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
+  print_test_result("空态集合再次删除 (应为ENTITY_EMPTY)", rc,
+                    LMJCORE_ERROR_ENTITY_EMPTY);
 
-  // 4. 对象同理：删除最后一个成员后回到空态，再删返回 ENTITY_NOT_FOUND
+  // 4. 对象同理：删除最后一个成员后回到空态，再删返回 ENTITY_EMPTY
   rc = lmjcore_obj_member_put(txn, obj_ptr, (const uint8_t *)"k", 1,
                               (const uint8_t *)"v", 1);
   print_test_result("lmjcore_obj_member_put (首个成员)", rc, LMJCORE_SUCCESS);
@@ -345,8 +345,8 @@ static void test_empty_entity_semantics(lmjcore_env *env) {
   print_test_result("对象成员清空后状态 (应为0)", rc, 0);
 
   rc = lmjcore_obj_del(txn, obj_ptr);
-  print_test_result("空态对象删除 (应为ENTITY_NOT_FOUND)", rc,
-                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
+  print_test_result("空态对象删除 (应为ENTITY_EMPTY)", rc,
+                    LMJCORE_ERROR_ENTITY_EMPTY);
 
   lmjcore_txn_commit(txn);
 }
@@ -372,11 +372,11 @@ static void test_set_operations(lmjcore_env *env) {
   rc = lmjcore_entity_stat(txn, set_ptr);
   print_test_result("空集合状态 (应为0)", rc, 0);
 
-  // 1.2 空态的统计返回 ENTITY_NOT_FOUND（没有可统计的内容）
+  // 1.2 空态的统计返回 ENTITY_EMPTY（没有可统计的内容）
   size_t empty_total = 0, empty_elems = 0;
   rc = lmjcore_set_stat(txn, set_ptr, &empty_total, &empty_elems);
-  print_test_result("空集合统计 (应为ENTITY_NOT_FOUND)", rc,
-                    LMJCORE_ERROR_ENTITY_NOT_FOUND);
+  print_test_result("空集合统计 (应为ENTITY_EMPTY)", rc,
+                    LMJCORE_ERROR_ENTITY_EMPTY);
 
   // 2. 追加元素
   const char *elements[] = {"Apple", "Banana", "Cherry", "Date"};
@@ -556,7 +556,7 @@ static void test_error_handling(lmjcore_env *env) {
   const char *err_str = lmjcore_strerror(LMJCORE_ERROR_NULL_POINTER);
   printf("错误码转换: %s\n", err_str);
 
-  err_str = lmjcore_strerror(LMJCORE_ERROR_ENTITY_NOT_FOUND);
+  err_str = lmjcore_strerror(LMJCORE_ERROR_ENTITY_EMPTY);
   printf("错误码转换: %s\n", err_str);
 
   // 测试LMDB错误码转换

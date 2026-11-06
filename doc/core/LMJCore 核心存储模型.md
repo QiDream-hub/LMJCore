@@ -169,7 +169,7 @@ main[ptr_obj + "name"] → "Alice"
 | **已实化** | `set` 中存在以其指针为 Key、且至少有一个 value 的条目；`entity_stat` 返回 1 |
 | **空态（默认）** | `set` 中无对应 Key：坐标刚分配尚未写入，或成员/元素已被全部删除；`entity_stat` 返回 0 |
 | **状态判定** | `lmjcore_entity_stat()` 返回 1（已实化）/ 0（空态） |
-| **空态上的操作** | `obj_get` / `set_get` 在结果中记录 `ENTITY_NOT_FOUND` 错误位；`obj_stat_members` / `set_stat` / `obj_del` / `set_del` 返回 `ENTITY_NOT_FOUND`（含义：当前没有可操作内容） |
+| **空态上的操作** | `obj_get` / `set_get` 在结果中记录 `ENTITY_EMPTY` 错误位；`obj_stat_members` / `set_stat` / `obj_del` / `set_del` 返回 `ENTITY_EMPTY`（含义：当前没有可操作内容） |
 | **0 长度成员名/元素** | 返回 `INVALID_PARAM`（`set` 库为重复键数据库，value 不允许为空） |
 
 | 场景 | 建议方案 |

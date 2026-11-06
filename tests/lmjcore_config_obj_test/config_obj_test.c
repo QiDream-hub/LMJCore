@@ -139,7 +139,7 @@ void test_config_error_handling() {
   const char *test_key = "nonexistent.key";
   ret = lmjcore_config_get(txn, (const uint8_t *)test_key, strlen(test_key),
                            value_buf, sizeof(value_buf), &value_size);
-  assert(ret == LMJCORE_ERROR_ENTITY_NOT_FOUND);
+  assert(ret == LMJCORE_ERROR_ENTITY_EMPTY);
 
   // 测试2: 获取不存在的配置项（但配置对象存在）
   // 首先创建配置对象

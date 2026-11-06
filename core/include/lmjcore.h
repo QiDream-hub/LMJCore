@@ -27,14 +27,15 @@ extern "C" {
 #define LMJCORE_ERROR_READONLY_PARENT -32021 // 父事务是只读，不能开子事务
 
 // 实体相关 (-32040 ~ -32059)
-#define LMJCORE_ERROR_ENTITY_NOT_FOUND -32040     // 实体处于空态（无可操作内容）
-#define LMJCORE_ERROR_ENTITY_EXISTS -32041        // 实体已存在
-#define LMJCORE_ERROR_ENTITY_TYPE_MISMATCH -32042 // 实体类型不匹配
+#define LMJCORE_ERROR_ENTITY_EMPTY -32040          // 实体处于空态（未实化，无可操作内容）
+#define LMJCORE_ERROR_ENTITY_EXISTS -32041         // 实体已存在
+#define LMJCORE_ERROR_ENTITY_TYPE_MISMATCH -32042  // 实体类型不匹配
 
-// 成员相关 (-32060 ~ -32079)
-#define LMJCORE_ERROR_MEMBER_NOT_FOUND -32060 // 成员不存在
-#define LMJCORE_ERROR_MEMBER_EXISTS -32061    // 成员已存在
-#define LMJCORE_ERROR_MEMBER_MISSING -32062   // 成员缺失值
+// 成员/元素相关 (-32060 ~ -32079)
+#define LMJCORE_ERROR_MEMBER_NOT_FOUND -32060  // 成员不存在
+#define LMJCORE_ERROR_MEMBER_EXISTS -32061     // 成员已存在
+#define LMJCORE_ERROR_MEMBER_MISSING -32062    // 成员缺失值
+#define LMJCORE_ERROR_ELEMENT_NOT_FOUND -32063 // 集合元素不存在
 
 // 资源相关 (-32080 ~ -32099)
 #define LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED -32080 // 内存分配失败
@@ -416,7 +417,7 @@ int lmjcore_obj_new(lmjcore_env *env, lmjcore_ptr ptr_out);
  * @return int 错误码（LMJCORE_SUCCESS 表示成功）
  *
  * 对象处于空态（尚无任何成员）时仍返回 LMJCORE_SUCCESS，并在结果的
- * errors 中记录一条 LMJCORE_ERROR_ENTITY_NOT_FOUND——表示没有可读取的
+ * errors 中记录一条 LMJCORE_ERROR_ENTITY_EMPTY——表示没有可读取的
  * 内容，而不是坐标无效。
  */
 int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
@@ -433,7 +434,7 @@ int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  * @param obj_ptr 目标对象指针
  * @return int 错误码
  *   - LMJCORE_SUCCESS: 成功
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 对象处于空态，没有可删除的内容
+ *   - LMJCORE_ERROR_ENTITY_EMPTY: 对象处于空态，没有可删除的内容
  */
 int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr);
 
@@ -466,7 +467,7 @@ int lmjcore_obj_member_list(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  * @param value_size_out 输出参数，返回实际值的长度
  * @return int 错误码
  *   - LMJCORE_SUCCESS: 成功
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 对象处于空态，没有可读取的内容
+ *   - LMJCORE_ERROR_ENTITY_EMPTY: 对象处于空态，没有可读取的内容
  *   - LMJCORE_ERROR_MEMBER_NOT_FOUND: 成员不存在（缺失值或未注册）
  */
 int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
@@ -570,7 +571,7 @@ int lmjcore_obj_stat_values(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
  * @param member_count_out 输出参数，成员总数量
  * @return int 错误码
  *   - LMJCORE_SUCCESS: 成功
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 对象处于空态，没有可统计的内容
+ *   - LMJCORE_ERROR_ENTITY_EMPTY: 对象处于空态，没有可统计的内容
  */
 int lmjcore_obj_stat_members(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
                              size_t *total_member_len_out,
@@ -641,7 +642,7 @@ int lmjcore_set_get(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
  * @param set_ptr 待删除的集合指针
  * @return int 错误码
  *   - LMJCORE_SUCCESS: 成功
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 集合处于空态，没有可删除的内容
+ *   - LMJCORE_ERROR_ENTITY_EMPTY: 集合处于空态，没有可删除的内容
  */
 int lmjcore_set_del(lmjcore_txn *txn, const lmjcore_ptr set_ptr);
 
@@ -686,7 +687,7 @@ int lmjcore_set_contains(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
  * @param element_count_out 输出参数，元素总数量
  * @return int 错误码
  *   - LMJCORE_SUCCESS: 成功
- *   - LMJCORE_ERROR_ENTITY_NOT_FOUND: 集合处于空态，没有可统计的内容
+ *   - LMJCORE_ERROR_ENTITY_EMPTY: 集合处于空态，没有可统计的内容
  */
 int lmjcore_set_stat(lmjcore_txn *txn, const lmjcore_ptr set_ptr,
                      size_t *total_value_len_out, size_t *element_count_out);

@@ -60,7 +60,7 @@ static const LmjCoreErrorEntry error_entries[] = {
      "Parent transaction is read-only, cannot create sub-transaction"},
 
     // Entity Errors
-    {LMJCORE_ERROR_ENTITY_NOT_FOUND, "Entity not found"},
+    {LMJCORE_ERROR_ENTITY_EMPTY, "Entity is empty"},
     {LMJCORE_ERROR_ENTITY_EXISTS, "Entity already exists"},
     {LMJCORE_ERROR_ENTITY_TYPE_MISMATCH, "Entity type mismatch"},
 
@@ -68,6 +68,7 @@ static const LmjCoreErrorEntry error_entries[] = {
     {LMJCORE_ERROR_MEMBER_NOT_FOUND, "Member not found"},
     {LMJCORE_ERROR_MEMBER_EXISTS, "Member already exists"},
     {LMJCORE_ERROR_MEMBER_MISSING, "Member value missing"},
+    {LMJCORE_ERROR_ELEMENT_NOT_FOUND, "Set element not found"},
 
     // Resource Errors
     {LMJCORE_ERROR_MEMORY_ALLOCATION_FAILED, "Memory allocation failed"},
@@ -250,7 +251,7 @@ static int set_get_all_values(lmjcore_txn *txn, const lmjcore_ptr ptr,
     mdb_cursor_close(cursor);
     result->element_count = 0;
     result->error_count += 1;
-    result_set_add_error(result, LMJCORE_ERROR_ENTITY_NOT_FOUND, 0, 0, ptr);
+    result_set_add_error(result, LMJCORE_ERROR_ENTITY_EMPTY, 0, 0, ptr);
     return LMJCORE_SUCCESS; // 有意设计：空集合返回成功
   }
   if (rc != MDB_SUCCESS) {
@@ -336,7 +337,7 @@ static int set_stat_values(lmjcore_txn *txn, const lmjcore_ptr ptr,
   if (rc == MDB_NOTFOUND) {
     // 空态：该坐标在 set 库中没有任何 value，没有可统计的内容
     mdb_cursor_close(cursor);
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_ENTITY_EMPTY;
   }
   if (rc != MDB_SUCCESS) {
     mdb_cursor_close(cursor);
@@ -610,7 +611,7 @@ int lmjcore_obj_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   }
   if (rc == 0) {
     // 空态：坐标合法，但尚无成员可读
-    result_obj_add_error(result, LMJCORE_ERROR_ENTITY_NOT_FOUND, 0, 0, obj_ptr);
+    result_obj_add_error(result, LMJCORE_ERROR_ENTITY_EMPTY, 0, 0, obj_ptr);
     return LMJCORE_SUCCESS;
   }
 
@@ -764,7 +765,7 @@ int lmjcore_obj_del(lmjcore_txn *txn, const lmjcore_ptr obj_ptr) {
   if (rc == MDB_NOTFOUND) {
     // 空态：没有成员注册，也就没有可删除的内容
     mdb_cursor_close(cursor);
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_ENTITY_EMPTY;
   }
 
   if (rc == MDB_SUCCESS) {
@@ -928,7 +929,7 @@ int lmjcore_obj_member_get(lmjcore_txn *txn, const lmjcore_ptr obj_ptr,
   // 确认对象已实化
   int rc = lmjcore_entity_stat(txn, obj_ptr);
   if (rc <= 0) {
-    return rc == 0 ? LMJCORE_ERROR_ENTITY_NOT_FOUND : rc;
+    return rc == 0 ? LMJCORE_ERROR_ENTITY_EMPTY : rc;
   }
 
   // 成员名长度检查
@@ -1106,7 +1107,7 @@ int lmjcore_set_del(lmjcore_txn *txn, const lmjcore_ptr set_ptr) {
   int rc = mdb_del(txn->mdb_txn, txn->env->set_dbi, &key, NULL);
   if (rc == MDB_NOTFOUND) {
     // 空态：没有元素，也就没有可删除的内容
-    return LMJCORE_ERROR_ENTITY_NOT_FOUND;
+    return LMJCORE_ERROR_ENTITY_EMPTY;
   }
   if (rc != MDB_SUCCESS) {
     return rc;

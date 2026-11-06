@@ -97,22 +97,21 @@ static void test_error_parsing() {
 
   lmjcore_result_obj *obj = (lmjcore_result_obj *)buf;
   obj->error_count = 2;
-  obj->errors[0].error_code = LMJCORE_ERROR_ENTITY_NOT_FOUND;
+  obj->errors[0].error_code = LMJCORE_ERROR_ENTITY_EMPTY;
   obj->errors[1].error_code = LMJCORE_ERROR_MEMBER_MISSING;
 
   assert(lmjcore_parser_error_count(buf) == 2);
-  assert(lmjcore_parser_has_error(buf, LMJCORE_ERROR_ENTITY_NOT_FOUND));
+  assert(lmjcore_parser_has_error(buf, LMJCORE_ERROR_ENTITY_EMPTY));
   assert(lmjcore_parser_has_error(buf, LMJCORE_ERROR_MEMBER_MISSING));
 
   const lmjcore_read_error *err;
   assert(lmjcore_parser_get_error(buf, 0, &err) == LMJCORE_SUCCESS);
-  assert(err->error_code == LMJCORE_ERROR_ENTITY_NOT_FOUND);
+  assert(err->error_code == LMJCORE_ERROR_ENTITY_EMPTY);
 
   assert(lmjcore_parser_get_error(buf, 1, &err) == LMJCORE_SUCCESS);
   assert(err->error_code == LMJCORE_ERROR_MEMBER_MISSING);
 
-  assert(lmjcore_parser_get_error(buf, 2, &err) ==
-         LMJCORE_ERROR_ENTITY_NOT_FOUND);
+  assert(lmjcore_parser_get_error(buf, 2, &err) == LMJCORE_ERROR_INVALID_PARAM);
 }
 
 int main(void) {
@@ -145,12 +144,11 @@ int main(void) {
 
     assert(lmjcore_parser_obj_find_member(obj_result, buf, (uint8_t *)"missing",
                                           7, NULL, NULL) ==
-           LMJCORE_ERROR_ENTITY_NOT_FOUND);
+           LMJCORE_ERROR_MEMBER_NOT_FOUND);
 
     // 越界索引
     assert(lmjcore_parser_obj_get_member(obj_result, buf, 5, NULL, NULL, NULL,
-                                         NULL) ==
-           LMJCORE_ERROR_ENTITY_NOT_FOUND);
+                                         NULL) == LMJCORE_ERROR_INVALID_PARAM);
   }
 
   // ===== 测试数组解析 =====
@@ -176,10 +174,10 @@ int main(void) {
 
     assert(lmjcore_parser_arr_find_element(arr_result, buf, (uint8_t *)"grape",
                                            5, NULL) ==
-           LMJCORE_ERROR_ENTITY_NOT_FOUND);
+           LMJCORE_ERROR_ELEMENT_NOT_FOUND);
 
     assert(lmjcore_parser_arr_get_element(arr_result, buf, 10, NULL, NULL) ==
-           LMJCORE_ERROR_ENTITY_NOT_FOUND);
+           LMJCORE_ERROR_INVALID_PARAM);
   }
 
   // ===== 测试错误解析 =====
